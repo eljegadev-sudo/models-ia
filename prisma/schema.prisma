@@ -1,0 +1,234 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  CLIENT
+  CREATOR
+}
+
+enum ContentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELLED
+  EXPIRED
+}
+
+enum SenderType {
+  CLIENT
+  MODEL
+}
+
+enum TransactionType {
+  SUBSCRIPTION
+  TIP
+  CONTENT_UNLOCK
+  MESSAGE_UNLOCK
+}
+
+enum TransactionStatus {
+  COMPLETED
+  PENDING
+  FAILED
+}
+
+model User {
+  id              String   @id @default(cuid())
+  email           String   @unique
+  username        String   @unique
+  password        String
+  role            UserRole @default(CLIENT)
+  avatar          String?
+  balance         Decimal  @default(1000)
+  preferredLocale String   @default("es")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  modelProfiles        ModelProfile[]
+  subscriptions        Subscription[]
+  sentTransactions     Transaction[]    @relation("TransactionFrom")
+  receivedTransactions Transaction[]    @relation("TransactionTo")
+  conversations        Conversation[]
+  favorites            Favorite[]
+}
+
+model ModelProfile {
+  id                String   @id @default(cuid())
+  userId            String
+  slug              String   @unique
+  name              String
+  age               Int
+  nationality       String
+  bio               String   @db.Text
+  bodyType          String?
+  hairColor         String?
+  hairType          String?
+  ethnicity         String?
+  height            Float?
+  subscriptionPrice Decimal  @default(9.99)
+  isActive          Boolean  @default(true)
+  chatAutomatic     Boolean  @default(true)
+  chatPersonality   String?  @db.Text
+  eroticLevel       Int      @default(3)
+  voiceModelId      String?
+  countryOfResidence String?
+  timezone          String?  @default("America/New_York")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  referenceImages ReferenceImage[]
+  contentPosts    ContentPost[]
+  subscriptions   Subscription[]
+  conversations   Conversation[]
+  favorites       Favorite[]
+  stories         Story[]
+
+  @@index([userId])
+}
+
+model ReferenceImage {
+  id             String   @id @default(cuid())
+  modelProfileId String
+  imageUrl       String
+  isAiGenerated  Boolean  @default(false)
+  prompt         String?  @db.Text
+  orderIndex     Int      @default(0)
+  createdAt      DateTime @default(now())
+
+  modelProfile ModelProfile @relation(fields: [modelProfileId], references: [id], onDelete: Cascade)
+
+  @@index([modelProfileId])
+}
+
+model ContentPost {
+  id             String        @id @default(cuid())
+  modelProfileId String
+  imageUrl       String
+  caption        String?       @db.Text
+  isPrivate      Boolean       @default(false)
+  price          Decimal       @default(0)
+  promptUsed     String?       @db.Text
+  status         ContentStatus @default(PENDING)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  modelProfile ModelProfile @relation(fields: [modelProfileId], references: [id], onDelete: Cascade)
+
+  @@index([modelProfileId])
+}
+
+model Subscription {
+  id             String             @id @default(cuid())
+  clientId       String
+  modelProfileId String
+  status         SubscriptionStatus @default(ACTIVE)
+  startedAt      DateTime           @default(now())
+  expiresAt      DateTime
+
+  client       User         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  modelProfile ModelProfile @relation(fields: [modelProfileId], references: [id], onDelete: Cascade)
+
+  @@unique([clientId, modelProfileId])
+  @@index([clientId])
+  @@index([modelProfileId])
+}
+
+model Conversation {
+  id               String    @id @default(cuid())
+  clientId         String
+  modelProfileId   String
+  isAutomated      Boolean   @default(true)
+  aiEnabled        Boolean   @default(true)
+  eroticLevel      Int       @default(3)
+  preferredName    String?
+  memoryContext    String?   @db.Text
+  currentState     String?   @db.Text
+  lastMemoryUpdate DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  client       User         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  modelProfile ModelProfile @relation(fields: [modelProfileId], references: [id], onDelete: Cascade)
+  messages     Message[]
+
+  @@unique([clientId, modelProfileId])
+  @@index([clientId])
+  @@index([modelProfileId])
+}
+
+model Message {
+  id             String     @id @default(cuid())
+  conversationId String
+  senderType     SenderType
+  content        String?    @db.Text
+  imageUrl       String?
+  audioUrl       String?
+  isPaidContent  Boolean    @default(false)
+  price          Decimal    @default(0)
+  isUnlocked     Boolean    @default(false)
+  createdAt      DateTime   @default(now())
+
+  conversation Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@index([conversationId])
+}
+
+model Favorite {
+  id             String   @id @default(cuid())
+  userId         String
+  modelProfileId String
+  createdAt      DateTime @default(now())
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  modelProfile ModelProfile @relation(fields: [modelProfileId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, modelProfileId])
+  @@index([userId])
+  @@index([modelProfileId])
+}
+
+model Story {
+  id             String        @id @default(cuid())
+  modelProfileId String
+  imageUrl       String
+  caption        String?       @db.Text
+  status         ContentStatus @default(PENDING)
+  expiresAt      DateTime
+  createdAt      DateTime      @default(now())
+
+  modelProfile ModelProfile @relation(fields: [modelProfileId], references: [id], onDelete: Cascade)
+
+  @@index([modelProfileId])
+  @@index([expiresAt])
+}
+
+model Transaction {
+  id          String            @id @default(cuid())
+  fromUserId  String
+  toUserId    String
+  type        TransactionType
+  amount      Decimal
+  referenceId String?
+  messageId   String?
+  status      TransactionStatus @default(COMPLETED)
+  createdAt   DateTime          @default(now())
+
+  fromUser User     @relation("TransactionFrom", fields: [fromUserId], references: [id])
+  toUser   User     @relation("TransactionTo", fields: [toUserId], references: [id])
+  message  Message? @relation(fields: [messageId], references: [id])
+
+  @@index([fromUserId])
+  @@index([toUserId])
+}

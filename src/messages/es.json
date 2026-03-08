@@ -1,0 +1,285 @@
+{
+  "nav": {
+    "home": "Inicio",
+    "explore": "Explorar",
+    "dashboard": "Panel",
+    "login": "Iniciar Sesión",
+    "register": "Registrarse",
+    "logout": "Cerrar Sesión",
+    "profile": "Perfil",
+    "settings": "Configuración",
+    "myModels": "Mis Modelos",
+    "earnings": "Ganancias",
+    "subscriptions": "Mis Suscripciones",
+    "messages": "Mensajes",
+    "favorites": "Mis Favoritas"
+  },
+  "landing": {
+    "badge": "Contenido Exclusivo",
+    "title": "Encuentra tu Compañía",
+    "titleHighlight": "Ideal",
+    "subtitle": "Descubre chicas increíbles, conversa en privado, disfruta de contenido exclusivo y vive experiencias íntimas únicas. Tu próxima conexión especial está a un clic.",
+    "cta": "Explorar Chicas",
+    "ctaSecondary": "Ver Perfiles",
+    "stats": {
+      "models": "Chicas",
+      "subscribers": "Usuarios Activos"
+    },
+    "features": {
+      "title": "Tu Experiencia Perfecta",
+      "subtitle": "Todo lo que necesitas para conectar y disfrutar",
+      "intimateChat": {
+        "title": "Chat Íntimo y Personal",
+        "description": "Conversa en privado con chicas que realmente te escuchan. Cada conversación es única, personal y tan intensa como tú quieras."
+      },
+      "exclusiveContent": {
+        "title": "Fotos y Contenido Exclusivo",
+        "description": "Accede a fotos privadas, contenido en lencería, bikini y mucho más. Contenido que solo verás tú como suscriptor."
+      },
+      "realConnection": {
+        "title": "Conexión que Se Siente Real",
+        "description": "Las chicas te recuerdan, saben lo que te gusta y te tratan como alguien especial. Una experiencia personalizada solo para ti."
+      },
+      "yourTerms": {
+        "title": "A Tu Ritmo, Sin Compromisos",
+        "description": "Suscríbete solo a quien te guste. Envía propinas, desbloquea fotos, chatea cuando quieras. Tú decides cuánto y cuándo."
+      }
+    },
+    "howItWorks": {
+      "title": "Así de Fácil",
+      "subtitle": "En tres pasos empiezas a disfrutar",
+      "step1": {
+        "title": "Explora Perfiles",
+        "description": "Navega entre chicas increíbles. Mira sus fotos públicas, lee sus bios y encuentra la que más te atraiga."
+      },
+      "step2": {
+        "title": "Suscríbete a Tu Favorita",
+        "description": "Desbloquea acceso a su contenido privado, chat personal y fotos exclusivas con una suscripción mensual."
+      },
+      "step3": {
+        "title": "Chatea y Disfruta",
+        "description": "Conversa en privado, pide fotos, envía propinas. Vive una experiencia íntima y personalizada."
+      }
+    },
+    "pricing": {
+      "title": "Simple y Sin Letra Pequeña",
+      "subtitle": "Explora gratis y paga solo por lo que quieras disfrutar",
+      "free": {
+        "name": "Explorador",
+        "price": "Gratis",
+        "description": "Descubre chicas y navega sus perfiles",
+        "features": ["Ver perfiles públicos", "Explorar fotos gratuitas", "Crear tu cuenta"]
+      },
+      "subscriber": {
+        "name": "Suscriptor",
+        "price": "Desde $9.99/mes",
+        "description": "Accede a todo el contenido exclusivo",
+        "features": ["Chat privado e íntimo", "Fotos y contenido exclusivo", "Enviar propinas", "Desbloquear fotos especiales", "Experiencia personalizada"]
+      }
+    },
+    "ctaSection": {
+      "title": "¿Listo para Conectar?",
+      "subtitle": "Miles de chicas increíbles te esperan. Tu experiencia exclusiva comienza ahora.",
+      "button": "Empieza Gratis"
+    }
+  },
+  "auth": {
+    "login": {
+      "title": "Bienvenido de Nuevo",
+      "subtitle": "Inicia sesión en tu cuenta",
+      "email": "Correo Electrónico",
+      "password": "Contraseña",
+      "submit": "Iniciar Sesión",
+      "loading": "Iniciando sesión...",
+      "noAccount": "¿No tienes cuenta?",
+      "register": "Regístrate",
+      "error": "Correo o contraseña incorrectos"
+    },
+    "register": {
+      "title": "Únete Ahora",
+      "subtitle": "Crea tu cuenta y empieza a explorar",
+      "email": "Correo Electrónico",
+      "username": "Nombre de Usuario",
+      "password": "Contraseña",
+      "confirmPassword": "Confirmar Contraseña",
+      "submit": "Crear Cuenta",
+      "loading": "Creando cuenta...",
+      "hasAccount": "¿Ya tienes cuenta?",
+      "login": "Iniciar Sesión",
+      "errors": {
+        "emailRequired": "El correo es obligatorio",
+        "emailInvalid": "Correo electrónico inválido",
+        "usernameRequired": "El nombre de usuario es obligatorio",
+        "usernameMin": "El nombre de usuario debe tener al menos 3 caracteres",
+        "passwordRequired": "La contraseña es obligatoria",
+        "passwordMin": "La contraseña debe tener al menos 8 caracteres",
+        "passwordMatch": "Las contraseñas no coinciden",
+        "emailExists": "El correo ya está registrado",
+        "usernameExists": "El nombre de usuario ya está en uso",
+        "generic": "Algo salió mal. Inténtalo de nuevo."
+      }
+    }
+  },
+  "dashboard": {
+    "welcome": "Bienvenido de nuevo",
+    "client": {
+      "title": "Panel",
+      "subtitle": "Gestiona tus suscripciones y descubre nuevas chicas",
+      "activeSubscriptions": "Suscripciones Activas",
+      "totalSpent": "Total Gastado",
+      "balance": "Saldo",
+      "recentActivity": "Actividad Reciente",
+      "noSubscriptions": "Aún no tienes suscripciones",
+      "exploreModels": "Explorar Chicas",
+      "favorites": "Mis Favoritas"
+    },
+    "creator": {
+      "title": "Panel de Creador",
+      "subtitle": "Gestiona tus modelos IA y ganancias",
+      "totalModels": "Total Modelos",
+      "totalSubscribers": "Total Suscriptores",
+      "totalEarnings": "Ganancias Totales",
+      "balance": "Saldo",
+      "recentEarnings": "Ganancias Recientes",
+      "myModels": "Mis Modelos",
+      "createModel": "Crear Nuevo Modelo",
+      "noModels": "Aún no has creado ningún modelo"
+    }
+  },
+  "models": {
+    "create": {
+      "title": "Crear Modelo IA",
+      "subtitle": "Define el perfil y apariencia de tu modelo",
+      "aiSuggest": "Generar con IA",
+      "manual": "Llenar Manualmente",
+      "name": "Nombre del Modelo",
+      "age": "Edad",
+      "nationality": "Nacionalidad",
+      "bio": "Biografía",
+      "bodyType": "Tipo de Cuerpo",
+      "hairColor": "Color de Cabello",
+      "hairType": "Tipo de Cabello",
+      "ethnicity": "Etnicidad",
+      "height": "Altura (cm)",
+      "subscriptionPrice": "Precio de Suscripción Mensual ($)",
+      "chatPersonality": "Descripción de Personalidad del Chat",
+      "chatPersonalityPlaceholder": "Describe cómo debe interactuar este modelo en el chat. Ej: Cálida, coqueta, directa, usa emojis, le gusta provocar...",
+      "eroticLevel": "Nivel Erótico",
+      "eroticLevelDesc": "Controla qué tan explícita es la modelo en el chat",
+      "referenceImages": "Imágenes de Referencia",
+      "referenceImagesDesc": "Sube hasta 5 imágenes de referencia o genéralas con IA",
+      "uploadImages": "Subir Imágenes",
+      "generateImages": "Generar con IA",
+      "imagePrompt": "Describe la apariencia del modelo para generación con IA",
+      "generating": "Generando...",
+      "submit": "Crear Modelo",
+      "success": "Modelo creado exitosamente"
+    },
+    "edit": {
+      "title": "Editar Modelo",
+      "submit": "Guardar Cambios",
+      "success": "Modelo actualizado exitosamente"
+    },
+    "content": {
+      "title": "Gestión de Contenido",
+      "generate": "Generar Contenido",
+      "generatePrompt": "Describe la escena o pose",
+      "approve": "Aprobar",
+      "reject": "Rechazar",
+      "makePublic": "Hacer Público",
+      "makePrivate": "Hacer Privado",
+      "setPrice": "Establecer Precio",
+      "noContent": "Sin contenido aún. ¡Genera tu primera imagen!",
+      "pending": "Pendiente de Revisión",
+      "approved": "Aprobado",
+      "rejected": "Rechazado"
+    },
+    "profile": {
+      "subscribe": "Suscribirse",
+      "subscribed": "Suscrita",
+      "chat": "Chatea Conmigo",
+      "monthlyPrice": "/mes",
+      "publicContent": "Contenido Público",
+      "privateContent": "Contenido Privado",
+      "unlockContent": "Desbloquear por",
+      "noPublicContent": "Sin contenido público aún",
+      "subscribeCta": "Suscríbete para chatear conmigo en privado, ver mis fotos exclusivas y mucho más...",
+      "favorite": "Favorita",
+      "unfavorite": "Quitar Favorita"
+    }
+  },
+  "explore": {
+    "title": "Explorar Chicas",
+    "subtitle": "Descubre chicas increíbles y encuentra tu compañía ideal",
+    "search": "Buscar chicas...",
+    "filters": "Filtros",
+    "noResults": "No se encontraron chicas",
+    "sortBy": "Ordenar por",
+    "newest": "Más Recientes",
+    "popular": "Más Populares",
+    "priceAsc": "Precio: Menor a Mayor",
+    "priceDesc": "Precio: Mayor a Menor"
+  },
+  "chat": {
+    "title": "Chat",
+    "placeholder": "Escribe un mensaje...",
+    "send": "Enviar",
+    "sendTip": "Enviar Propina",
+    "tipAmount": "Monto de Propina",
+    "paidPhoto": "Foto Exclusiva",
+    "unlockPhoto": "Desbloquear por",
+    "photoUnlocked": "Foto Desbloqueada",
+    "autoMode": "IA Activa",
+    "manualMode": "Modo Manual",
+    "online": "En línea",
+    "typing": "Escribiendo...",
+    "eroticLevel": "Nivel Erótico",
+    "eroticLevels": {
+      "1": "Suave",
+      "2": "Coqueta",
+      "3": "Sensual",
+      "4": "Explícita",
+      "5": "Sin Filtros"
+    },
+    "chatConfig": "Configuración de Chat",
+    "aiEnabled": "Respuestas con IA",
+    "personality": "Personalidad",
+    "memory": "Memoria del Chat",
+    "noMemory": "Aún no hay recuerdos guardados"
+  },
+  "payments": {
+    "balance": "Saldo",
+    "addFunds": "Agregar Fondos",
+    "amount": "Monto",
+    "history": "Historial de Transacciones",
+    "type": {
+      "SUBSCRIPTION": "Suscripción",
+      "TIP": "Propina",
+      "CONTENT_UNLOCK": "Desbloqueo de Contenido",
+      "MESSAGE_UNLOCK": "Desbloqueo de Mensaje"
+    },
+    "status": {
+      "COMPLETED": "Completada",
+      "PENDING": "Pendiente",
+      "FAILED": "Fallida"
+    },
+    "insufficientFunds": "Fondos insuficientes",
+    "success": "Pago exitoso"
+  },
+  "common": {
+    "loading": "Cargando...",
+    "error": "Algo salió mal",
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "delete": "Eliminar",
+    "edit": "Editar",
+    "back": "Volver",
+    "next": "Siguiente",
+    "submit": "Enviar",
+    "confirm": "Confirmar",
+    "search": "Buscar",
+    "noResults": "Sin resultados",
+    "viewAll": "Ver Todo",
+    "learnMore": "Saber Más"
+  }
+}

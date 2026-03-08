@@ -1,0 +1,285 @@
+{
+  "nav": {
+    "home": "Home",
+    "explore": "Explore",
+    "dashboard": "Dashboard",
+    "login": "Sign In",
+    "register": "Sign Up",
+    "logout": "Sign Out",
+    "profile": "Profile",
+    "settings": "Settings",
+    "myModels": "My Models",
+    "earnings": "Earnings",
+    "subscriptions": "My Subscriptions",
+    "messages": "Messages",
+    "favorites": "My Favorites"
+  },
+  "landing": {
+    "badge": "Exclusive Content",
+    "title": "Find Your Perfect",
+    "titleHighlight": "Companion",
+    "subtitle": "Discover amazing girls, chat privately, enjoy exclusive content and live unique intimate experiences. Your next special connection is just a click away.",
+    "cta": "Explore Girls",
+    "ctaSecondary": "View Profiles",
+    "stats": {
+      "models": "Girls",
+      "subscribers": "Active Users"
+    },
+    "features": {
+      "title": "Your Perfect Experience",
+      "subtitle": "Everything you need to connect and enjoy",
+      "intimateChat": {
+        "title": "Intimate & Personal Chat",
+        "description": "Chat privately with girls who truly listen to you. Every conversation is unique, personal and as intense as you want."
+      },
+      "exclusiveContent": {
+        "title": "Exclusive Photos & Content",
+        "description": "Access private photos, lingerie content, bikini shots and much more. Content that only you will see as a subscriber."
+      },
+      "realConnection": {
+        "title": "A Connection That Feels Real",
+        "description": "The girls remember you, know what you like and treat you like someone special. A personalized experience just for you."
+      },
+      "yourTerms": {
+        "title": "Your Pace, No Strings",
+        "description": "Subscribe only to who you like. Send tips, unlock photos, chat whenever you want. You decide how much and when."
+      }
+    },
+    "howItWorks": {
+      "title": "It's That Easy",
+      "subtitle": "Three steps to start enjoying",
+      "step1": {
+        "title": "Explore Profiles",
+        "description": "Browse amazing girls. Check their public photos, read their bios and find the one who attracts you most."
+      },
+      "step2": {
+        "title": "Subscribe to Your Favorite",
+        "description": "Unlock access to her private content, personal chat and exclusive photos with a monthly subscription."
+      },
+      "step3": {
+        "title": "Chat & Enjoy",
+        "description": "Chat privately, request photos, send tips. Live an intimate and personalized experience."
+      }
+    },
+    "pricing": {
+      "title": "Simple & No Fine Print",
+      "subtitle": "Explore for free and pay only for what you want to enjoy",
+      "free": {
+        "name": "Explorer",
+        "price": "Free",
+        "description": "Discover girls and browse profiles",
+        "features": ["View public profiles", "Explore free photos", "Create your account"]
+      },
+      "subscriber": {
+        "name": "Subscriber",
+        "price": "From $9.99/mo",
+        "description": "Access all exclusive content",
+        "features": ["Private & intimate chat", "Exclusive photos & content", "Send tips", "Unlock special photos", "Personalized experience"]
+      }
+    },
+    "ctaSection": {
+      "title": "Ready to Connect?",
+      "subtitle": "Thousands of amazing girls are waiting. Your exclusive experience starts now.",
+      "button": "Start Free"
+    }
+  },
+  "auth": {
+    "login": {
+      "title": "Welcome Back",
+      "subtitle": "Sign in to your account",
+      "email": "Email",
+      "password": "Password",
+      "submit": "Sign In",
+      "loading": "Signing in...",
+      "noAccount": "Don't have an account?",
+      "register": "Sign Up",
+      "error": "Invalid email or password"
+    },
+    "register": {
+      "title": "Join Now",
+      "subtitle": "Create your account and start exploring",
+      "email": "Email",
+      "username": "Username",
+      "password": "Password",
+      "confirmPassword": "Confirm Password",
+      "submit": "Create Account",
+      "loading": "Creating account...",
+      "hasAccount": "Already have an account?",
+      "login": "Sign In",
+      "errors": {
+        "emailRequired": "Email is required",
+        "emailInvalid": "Invalid email address",
+        "usernameRequired": "Username is required",
+        "usernameMin": "Username must be at least 3 characters",
+        "passwordRequired": "Password is required",
+        "passwordMin": "Password must be at least 8 characters",
+        "passwordMatch": "Passwords don't match",
+        "emailExists": "Email already registered",
+        "usernameExists": "Username already taken",
+        "generic": "Something went wrong. Please try again."
+      }
+    }
+  },
+  "dashboard": {
+    "welcome": "Welcome back",
+    "client": {
+      "title": "Dashboard",
+      "subtitle": "Manage your subscriptions and discover new girls",
+      "activeSubscriptions": "Active Subscriptions",
+      "totalSpent": "Total Spent",
+      "balance": "Balance",
+      "recentActivity": "Recent Activity",
+      "noSubscriptions": "You don't have any subscriptions yet",
+      "exploreModels": "Explore Girls",
+      "favorites": "My Favorites"
+    },
+    "creator": {
+      "title": "Creator Dashboard",
+      "subtitle": "Manage your AI models and earnings",
+      "totalModels": "Total Models",
+      "totalSubscribers": "Total Subscribers",
+      "totalEarnings": "Total Earnings",
+      "balance": "Balance",
+      "recentEarnings": "Recent Earnings",
+      "myModels": "My Models",
+      "createModel": "Create New Model",
+      "noModels": "You haven't created any models yet"
+    }
+  },
+  "models": {
+    "create": {
+      "title": "Create AI Model",
+      "subtitle": "Define your model's profile and appearance",
+      "aiSuggest": "Generate with AI",
+      "manual": "Fill Manually",
+      "name": "Model Name",
+      "age": "Age",
+      "nationality": "Nationality",
+      "bio": "Biography",
+      "bodyType": "Body Type",
+      "hairColor": "Hair Color",
+      "hairType": "Hair Type",
+      "ethnicity": "Ethnicity",
+      "height": "Height (cm)",
+      "subscriptionPrice": "Monthly Subscription Price ($)",
+      "chatPersonality": "Chat Personality Description",
+      "chatPersonalityPlaceholder": "Describe how this model should interact in chat. E.g.: Warm, flirty, direct, uses emojis, likes to tease...",
+      "eroticLevel": "Erotic Level",
+      "eroticLevelDesc": "Controls how explicit the model is in chat",
+      "referenceImages": "Reference Images",
+      "referenceImagesDesc": "Upload up to 5 reference images or generate them with AI",
+      "uploadImages": "Upload Images",
+      "generateImages": "Generate with AI",
+      "imagePrompt": "Describe the model's appearance for AI generation",
+      "generating": "Generating...",
+      "submit": "Create Model",
+      "success": "Model created successfully"
+    },
+    "edit": {
+      "title": "Edit Model",
+      "submit": "Save Changes",
+      "success": "Model updated successfully"
+    },
+    "content": {
+      "title": "Content Management",
+      "generate": "Generate Content",
+      "generatePrompt": "Describe the scene or pose",
+      "approve": "Approve",
+      "reject": "Reject",
+      "makePublic": "Make Public",
+      "makePrivate": "Make Private",
+      "setPrice": "Set Price",
+      "noContent": "No content yet. Generate your first image!",
+      "pending": "Pending Review",
+      "approved": "Approved",
+      "rejected": "Rejected"
+    },
+    "profile": {
+      "subscribe": "Subscribe",
+      "subscribed": "Subscribed",
+      "chat": "Chat With Me",
+      "monthlyPrice": "/month",
+      "publicContent": "Public Content",
+      "privateContent": "Private Content",
+      "unlockContent": "Unlock for",
+      "noPublicContent": "No public content yet",
+      "subscribeCta": "Subscribe to chat with me privately, see my exclusive photos and much more...",
+      "favorite": "Favorite",
+      "unfavorite": "Remove Favorite"
+    }
+  },
+  "explore": {
+    "title": "Explore Girls",
+    "subtitle": "Discover amazing girls and find your ideal companion",
+    "search": "Search girls...",
+    "filters": "Filters",
+    "noResults": "No girls found",
+    "sortBy": "Sort by",
+    "newest": "Newest",
+    "popular": "Most Popular",
+    "priceAsc": "Price: Low to High",
+    "priceDesc": "Price: High to Low"
+  },
+  "chat": {
+    "title": "Chat",
+    "placeholder": "Type a message...",
+    "send": "Send",
+    "sendTip": "Send Tip",
+    "tipAmount": "Tip Amount",
+    "paidPhoto": "Exclusive Photo",
+    "unlockPhoto": "Unlock for",
+    "photoUnlocked": "Photo Unlocked",
+    "autoMode": "AI Active",
+    "manualMode": "Manual Mode",
+    "online": "Online",
+    "typing": "Typing...",
+    "eroticLevel": "Erotic Level",
+    "eroticLevels": {
+      "1": "Soft",
+      "2": "Flirty",
+      "3": "Sensual",
+      "4": "Explicit",
+      "5": "Unfiltered"
+    },
+    "chatConfig": "Chat Settings",
+    "aiEnabled": "AI Responses",
+    "personality": "Personality",
+    "memory": "Chat Memory",
+    "noMemory": "No saved memories yet"
+  },
+  "payments": {
+    "balance": "Balance",
+    "addFunds": "Add Funds",
+    "amount": "Amount",
+    "history": "Transaction History",
+    "type": {
+      "SUBSCRIPTION": "Subscription",
+      "TIP": "Tip",
+      "CONTENT_UNLOCK": "Content Unlock",
+      "MESSAGE_UNLOCK": "Message Unlock"
+    },
+    "status": {
+      "COMPLETED": "Completed",
+      "PENDING": "Pending",
+      "FAILED": "Failed"
+    },
+    "insufficientFunds": "Insufficient funds",
+    "success": "Payment successful"
+  },
+  "common": {
+    "loading": "Loading...",
+    "error": "Something went wrong",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "back": "Back",
+    "next": "Next",
+    "submit": "Submit",
+    "confirm": "Confirm",
+    "search": "Search",
+    "noResults": "No results",
+    "viewAll": "View All",
+    "learnMore": "Learn More"
+  }
+}
