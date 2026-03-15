@@ -77,10 +77,10 @@ async function callRunPod(
 
   console.log(`[photonic] RunPod job enviado: ${jobId}`);
 
-  // Polling hasta que el job termine (max 10 minutos)
-  const maxWaitMs = 10 * 60 * 1000;
+  // Polling hasta que el job termine (max 25 minutos, cubre primer cold start + descarga modelos)
+  const maxWaitMs = 25 * 60 * 1000;
   const startTime = Date.now();
-  let pollInterval = 3000;
+  let pollInterval = 5000;
 
   while (Date.now() - startTime < maxWaitMs) {
     await new Promise((r) => setTimeout(r, pollInterval));
