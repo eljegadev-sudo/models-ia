@@ -260,6 +260,51 @@ def _get_local_snapshot_path(repo_id: str) -> str | None:
     return None
 
 
+def _maybe_merge_unet_shards(snapshot_path: str) -> None:
+    """
+    Si el UNet esta en formato sharded safetensors, lo fusiona en un solo archivo.
+    diffusers 0.27.2 no puede cargar shards desde directorios locales.
+    Esta fusion se hace UNA SOLA VEZ y el archivo queda en el volumen persistente.
+    """
+    unet_dir = Path(snapshot_path) / "unet"
+    if not unet_dir.exists():
+        return
+
+    merged_file = unet_dir / "diffusion_pytorch_model.safetensors"
+    if merged_file.exists() and merged_file.stat().st_size > 100_000_000:
+        print(f"[merge] UNet ya fusionado: {merged_file.stat().st_size / 1024**3:.2f} GB")
+        return
+
+    shard_files = sorted(unet_dir.glob("diffusion_pytorch_model-*-of-*.safetensors"))
+    if not shard_files:
+        print("[merge] No se encontraron shards del UNet")
+        return
+
+    total_mb = sum(f.stat().st_size for f in shard_files) / (1024 * 1024)
+    print(f"[merge] Fusionando {len(shard_files)} shards del UNet ({total_mb:.0f} MB total)...")
+    print(f"[merge] Esto tomara varios minutos, solo ocurre una vez.")
+
+    try:
+        from safetensors.torch import load_file, save_file
+        merged: dict = {}
+        for shard in shard_files:
+            print(f"[merge] Cargando shard: {shard.name} ({shard.stat().st_size / 1024**2:.0f} MB)...")
+            tensors = load_file(str(shard))
+            merged.update(tensors)
+
+        print(f"[merge] Guardando archivo fusionado ({len(merged)} tensores)...")
+        save_file(merged, str(merged_file))
+        size_gb = merged_file.stat().st_size / 1024**3
+        print(f"[merge] Fusion completa: {merged_file} ({size_gb:.2f} GB)")
+        del merged
+        import gc
+        gc.collect()
+    except Exception as e:
+        print(f"[merge] ERROR al fusionar shards: {e}")
+        if merged_file.exists():
+            merged_file.unlink()  # Limpiar archivo incompleto
+
+
 def _try_load_pipeline(pipeline_cls, vae):
     """
     Intenta cargar el pipeline con multiples estrategias.
@@ -330,6 +375,12 @@ def load_pipeline(pipeline_cls):
     print(f"[modelo] Iniciando carga de {MODEL_ID} ...")
 
     _verify_and_clean_model_cache(MODEL_ID)
+
+    # Fusionar shards del UNet si es necesario (fix para diffusers 0.27.2)
+    snap_path = _get_local_snapshot_path(MODEL_ID)
+    if snap_path:
+        _maybe_merge_unet_shards(snap_path)
+
     vae = _load_vae()
 
     try:

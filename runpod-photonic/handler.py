@@ -153,6 +153,9 @@ def _run_faceid(args: _Args, req: dict, t0: float) -> dict:
     ip_ckpt = hf_hub_download(repo_id=gp.FACEID_REPO, filename=gp.FACEID_BIN)
 
     gp._verify_and_clean_model_cache(gp.MODEL_ID)
+    snap_path = gp._get_local_snapshot_path(gp.MODEL_ID)
+    if snap_path:
+        gp._maybe_merge_unet_shards(snap_path)
     vae = gp._load_vae()
 
     def _load_faceid_pipe(_vae):
