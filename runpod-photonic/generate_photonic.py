@@ -8,6 +8,7 @@ Optimizado para textura de piel hiperrealista y anatomia explicita.
 from __future__ import annotations
 
 import os
+import shutil
 from pathlib import Path
 
 HF_HOME_DEFAULT = os.environ.get("HF_HOME", "/runpod-volume/hf_cache")
@@ -15,6 +16,57 @@ os.environ.setdefault("HF_HOME", HF_HOME_DEFAULT)
 
 import torch
 from PIL import Image
+
+
+# ---------------------------------------------------------------------------
+# Cache utilities
+# ---------------------------------------------------------------------------
+
+
+def _repo_to_dir_name(repo_id: str) -> str:
+    """Convert 'owner/model' to 'models--owner--model' HF cache dir format."""
+    return "models--" + repo_id.replace("/", "--")
+
+
+def _verify_and_clean_model_cache(repo_id: str) -> bool:
+    """
+    Verifica que el cache del modelo tiene archivos validos.
+    Si detecta snapshots incompletos (sin safetensors ni bin en unet), los borra.
+    Retorna True si el cache esta limpio (puede o no existir), False si se limpio algo.
+    """
+    hf_cache = Path(os.environ.get("HF_HOME", "/runpod-volume/hf_cache"))
+    model_dir = hf_cache / "hub" / _repo_to_dir_name(repo_id)
+
+    if not model_dir.exists():
+        print(f"[cache] Modelo no cacheado aun: {repo_id}")
+        return True
+
+    snapshots_dir = model_dir / "snapshots"
+    if not snapshots_dir.exists():
+        return True
+
+    cleaned = False
+    for snap_dir in snapshots_dir.iterdir():
+        if not snap_dir.is_dir():
+            continue
+        unet_dir = snap_dir / "unet"
+        if not unet_dir.exists():
+            continue
+
+        files = list(unet_dir.iterdir())
+        has_safetensors = any(f.suffix == ".safetensors" for f in files if f.is_file())
+        has_valid_bin = any(f.name.endswith(".bin") and f.stat().st_size > 1_000_000 for f in files if f.is_file())
+
+        if not has_safetensors and not has_valid_bin:
+            print(f"[cache] Snapshot incompleto detectado, limpiando: {snap_dir.name}")
+            shutil.rmtree(str(snap_dir), ignore_errors=True)
+            # Limpiar tambien el ref de blobs para forzar re-descarga
+            cleaned = True
+        else:
+            st_files = [f.name for f in files if f.suffix == ".safetensors"]
+            print(f"[cache] Snapshot OK {snap_dir.name}: {len(st_files)} safetensors en unet/")
+
+    return not cleaned
 
 # ---------------------------------------------------------------------------
 # Configuracion
@@ -126,12 +178,17 @@ def _load_vae():
 
 def load_pipeline(pipeline_cls):
     """Carga Photonic Fusion SDXL con VAE mejorado + cpu_offload."""
+    # Verificar y limpiar cache corrupto antes de cargar
+    _verify_and_clean_model_cache(MODEL_ID)
+
     vae = _load_vae()
     print(f"[modelo] Cargando {MODEL_ID} ...")
     # Intentar diferentes configuraciones de safetensors para compatibilidad maxima
+    errors = []
     for kwargs in [
         {"use_safetensors": True},
         {"use_safetensors": True, "variant": "fp16"},
+        {"variant": "fp16"},
         {},
     ]:
         try:
@@ -145,8 +202,9 @@ def load_pipeline(pipeline_cls):
             break
         except Exception as e:
             print(f"  [modelo] intento {kwargs} fallido: {e}")
+            errors.append(f"{kwargs}: {e}")
     else:
-        raise RuntimeError(f"No se pudo cargar el modelo: {MODEL_ID}")
+        raise RuntimeError(f"No se pudo cargar el modelo {MODEL_ID}. Errores:\n" + "\n".join(errors))
 
     _apply_scheduler(pipe)
     pipe.enable_model_cpu_offload()
