@@ -6,6 +6,14 @@ transformers==4.38.2
 accelerate==0.28.0
 huggingface-hub>=0.21.0
 Pillow>=10.0.0
+scipy>=1.11.0
+safetensors>=0.4.0
+# einops required by IP-Adapter and diffusers attention layers
+einops>=0.7.0
+# omegaconf required by basicsr/facexlib
+omegaconf>=2.3.0
+# xformers for memory-efficient attention (optional but speeds up SDXL)
+xformers
 opencv-python-headless>=4.9.0.80
 insightface==0.7.3
 onnxruntime-gpu==1.17.1
