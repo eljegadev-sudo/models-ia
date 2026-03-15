@@ -262,10 +262,13 @@ def _get_local_snapshot_path(repo_id: str) -> str | None:
 
 def _maybe_merge_unet_shards(snapshot_path: str) -> None:
     """
-    Si el UNet esta en formato sharded safetensors, lo fusiona en un solo archivo.
-    diffusers 0.27.2 no puede cargar shards desde directorios locales.
-    Esta fusion se hace UNA SOLA VEZ y el archivo queda en el volumen persistente.
+    Fusiona los shards del UNet en un solo archivo safetensors operando directamente
+    sobre bytes (sin cargar tensores en memoria). Solo ocurre una vez.
+    diffusers 0.27.2 no puede cargar sharded safetensors desde directorios locales.
     """
+    import json
+    import struct
+
     unet_dir = Path(snapshot_path) / "unet"
     if not unet_dir.exists():
         return
@@ -275,34 +278,80 @@ def _maybe_merge_unet_shards(snapshot_path: str) -> None:
         print(f"[merge] UNet ya fusionado: {merged_file.stat().st_size / 1024**3:.2f} GB")
         return
 
-    shard_files = sorted(unet_dir.glob("diffusion_pytorch_model-*-of-*.safetensors"))
+    # Buscar shards (pueden ser symlinks)
+    shard_files = sorted(
+        f for f in unet_dir.iterdir()
+        if f.name.startswith("diffusion_pytorch_model-") and f.name.endswith(".safetensors")
+    )
     if not shard_files:
-        print("[merge] No se encontraron shards del UNet")
+        print(f"[merge] No se encontraron shards en {unet_dir}")
+        print(f"[merge] Archivos en unet/: {[f.name for f in unet_dir.iterdir()]}")
         return
 
     total_mb = sum(f.stat().st_size for f in shard_files) / (1024 * 1024)
-    print(f"[merge] Fusionando {len(shard_files)} shards del UNet ({total_mb:.0f} MB total)...")
-    print(f"[merge] Esto tomara varios minutos, solo ocurre una vez.")
+    print(f"[merge] Iniciando fusion de {len(shard_files)} shards ({total_mb:.0f} MB) en un solo archivo")
+    print(f"[merge] Operacion en bytes (sin cargar tensores en RAM) - solo ocurre una vez")
 
+    tmp_file = unet_dir / "diffusion_pytorch_model.safetensors.tmp"
     try:
-        from safetensors.torch import load_file, save_file
-        merged: dict = {}
+        # Paso 1: leer headers de cada shard para calcular offsets globales
+        shard_headers = []
+        shard_header_sizes = []
         for shard in shard_files:
-            print(f"[merge] Cargando shard: {shard.name} ({shard.stat().st_size / 1024**2:.0f} MB)...")
-            tensors = load_file(str(shard))
-            merged.update(tensors)
+            with open(str(shard), "rb") as f:
+                header_size = struct.unpack("<Q", f.read(8))[0]
+                header = json.loads(f.read(header_size).decode("utf-8"))
+            shard_headers.append(header)
+            shard_header_sizes.append(header_size)
+            print(f"[merge]   shard {shard.name}: {len(header)} keys, header={header_size} bytes")
 
-        print(f"[merge] Guardando archivo fusionado ({len(merged)} tensores)...")
-        save_file(merged, str(merged_file))
+        # Paso 2: construir header fusionado con offsets recalculados
+        merged_header: dict = {"__metadata__": {}}
+        global_data_offset = 0
+        for header in shard_headers:
+            for key, info in header.items():
+                if key == "__metadata__":
+                    continue
+                offsets = info["data_offsets"]
+                size = offsets[1] - offsets[0]
+                new_start = global_data_offset + offsets[0]
+                new_end = new_start + size
+                merged_header[key] = {**info, "data_offsets": [new_start, new_end]}
+            # El offset global avanza por el tamano de datos del shard
+            max_end = max(v["data_offsets"][1] for k, v in header.items() if k != "__metadata__") if any(k != "__metadata__" for k in header) else 0
+            global_data_offset += max_end
+
+        # Paso 3: escribir archivo fusionado copiando bytes crudos de cada shard
+        header_bytes = json.dumps(merged_header, separators=(",", ":")).encode("utf-8")
+        print(f"[merge] Header fusionado: {len(merged_header) - 1} tensores, {len(header_bytes)} bytes")
+
+        with open(str(tmp_file), "wb") as out:
+            out.write(struct.pack("<Q", len(header_bytes)))
+            out.write(header_bytes)
+            for shard, h_size in zip(shard_files, shard_header_sizes):
+                print(f"[merge]   copiando bytes de {shard.name}...")
+                with open(str(shard), "rb") as inp:
+                    inp.seek(8 + h_size)  # Saltar header del shard
+                    CHUNK = 64 * 1024 * 1024  # 64 MB chunks
+                    while True:
+                        chunk = inp.read(CHUNK)
+                        if not chunk:
+                            break
+                        out.write(chunk)
+
+        # Renombrar atomicamente
+        tmp_file.rename(merged_file)
         size_gb = merged_file.stat().st_size / 1024**3
         print(f"[merge] Fusion completa: {merged_file} ({size_gb:.2f} GB)")
-        del merged
-        import gc
-        gc.collect()
+
     except Exception as e:
-        print(f"[merge] ERROR al fusionar shards: {e}")
-        if merged_file.exists():
-            merged_file.unlink()  # Limpiar archivo incompleto
+        print(f"[merge] ERROR: {e}")
+        import traceback
+        traceback.print_exc()
+        if tmp_file.exists():
+            tmp_file.unlink()
+        if merged_file.exists() and merged_file.stat().st_size < 100_000_000:
+            merged_file.unlink()
 
 
 def _try_load_pipeline(pipeline_cls, vae):
@@ -386,16 +435,21 @@ def load_pipeline(pipeline_cls):
     try:
         pipe = _try_load_pipeline(pipeline_cls, vae)
     except RuntimeError as first_err:
-        print(f"[modelo] Primer intento fallido:\n{first_err}")
-        print("[modelo] Limpieza nuclear del cache y reintento (descarga ~7 GB, ~10-15 min)...")
+        print(f"[modelo] Primer intento fallido: {str(first_err)[:200]}")
+        print("[modelo] Limpieza nuclear del cache y reintento (descarga ~7 GB, ~15 min)...")
         _nuclear_clean_model_cache(MODEL_ID)
+        # Esperar a que el modelo se re-descargue (triggera la descarga via from_pretrained)
+        # Hacer primero un from_pretrained rapido para triggear la descarga
         vae = _load_vae()
+        snap_path2 = _get_local_snapshot_path(MODEL_ID)
+        if snap_path2:
+            _maybe_merge_unet_shards(snap_path2)
         try:
             pipe = _try_load_pipeline(pipeline_cls, vae)
         except RuntimeError as second_err:
             raise RuntimeError(
                 f"No se pudo cargar {MODEL_ID} ni tras limpiar cache.\n"
-                f"1er intento:\n{first_err}\n\n2do intento:\n{second_err}"
+                f"1er intento:\n{str(first_err)[:500]}\n\n2do intento:\n{str(second_err)[:500]}"
             )
 
     _apply_scheduler(pipe)
