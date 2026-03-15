@@ -114,19 +114,39 @@ def _load_vae():
     from diffusers import AutoencoderKL
 
     print(f"[vae] Cargando VAE mejorado: {VAE_ID} ...")
-    return AutoencoderKL.from_pretrained(VAE_ID, torch_dtype=torch.float16, use_safetensors=True)
+    for kwargs in [{"use_safetensors": True}, {"use_safetensors": True, "variant": "fp16"}, {}]:
+        try:
+            vae = AutoencoderKL.from_pretrained(VAE_ID, torch_dtype=torch.float16, **kwargs)
+            print(f"  [vae] OK con {kwargs}")
+            return vae
+        except Exception as e:
+            print(f"  [vae] intento {kwargs} fallido: {e}")
+    raise RuntimeError(f"No se pudo cargar VAE: {VAE_ID}")
 
 
 def load_pipeline(pipeline_cls):
     """Carga Photonic Fusion SDXL con VAE mejorado + cpu_offload."""
     vae = _load_vae()
     print(f"[modelo] Cargando {MODEL_ID} ...")
-    pipe = pipeline_cls.from_pretrained(
-        MODEL_ID,
-        vae=vae,
-        torch_dtype=torch.float16,
-        use_safetensors=True,
-    )
+    # Intentar diferentes configuraciones de safetensors para compatibilidad maxima
+    for kwargs in [
+        {"use_safetensors": True},
+        {"use_safetensors": True, "variant": "fp16"},
+        {},
+    ]:
+        try:
+            pipe = pipeline_cls.from_pretrained(
+                MODEL_ID,
+                vae=vae,
+                torch_dtype=torch.float16,
+                **kwargs,
+            )
+            print(f"  [modelo] OK con {kwargs}")
+            break
+        except Exception as e:
+            print(f"  [modelo] intento {kwargs} fallido: {e}")
+    else:
+        raise RuntimeError(f"No se pudo cargar el modelo: {MODEL_ID}")
 
     _apply_scheduler(pipe)
     pipe.enable_model_cpu_offload()

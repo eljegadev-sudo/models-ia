@@ -153,9 +153,18 @@ def _run_faceid(args: _Args, req: dict, t0: float) -> dict:
     ip_ckpt = hf_hub_download(repo_id=gp.FACEID_REPO, filename=gp.FACEID_BIN)
 
     vae = gp._load_vae()
-    pipe = StableDiffusionXLPipeline.from_pretrained(
-        gp.MODEL_ID, vae=vae, torch_dtype=torch.float16, use_safetensors=True,
-    )
+    # Intentar diferentes configuraciones para maxima compatibilidad
+    for _kwargs in [{"use_safetensors": True}, {"use_safetensors": True, "variant": "fp16"}, {}]:
+        try:
+            pipe = StableDiffusionXLPipeline.from_pretrained(
+                gp.MODEL_ID, vae=vae, torch_dtype=torch.float16, **_kwargs,
+            )
+            print(f"  [faceid pipe] OK con {_kwargs}")
+            break
+        except Exception as _e:
+            print(f"  [faceid pipe] intento {_kwargs} fallido: {_e}")
+    else:
+        raise RuntimeError(f"No se pudo cargar el pipeline: {gp.MODEL_ID}")
     gp._apply_scheduler(pipe)
     pipe.enable_vae_tiling()
     gp._try_xformers(pipe)
