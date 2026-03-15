@@ -33,6 +33,11 @@ RUN npm run build
 # ---- Final production stage ----
 FROM base
 
+# Install OpenSSL (required by Prisma at runtime in slim images)
+RUN apt-get update -qq && \
+    apt-get install --no-install-recommends -y openssl && \
+    rm -rf /var/lib/apt/lists/*
+
 # Copy standalone output (Next.js + minimal traced node_modules)
 COPY --from=build /app/.next/standalone /app
 COPY --from=build /app/.next/static /app/.next/static
