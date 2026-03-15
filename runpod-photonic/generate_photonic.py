@@ -114,7 +114,7 @@ def _load_vae():
     from diffusers import AutoencoderKL
 
     print(f"[vae] Cargando VAE mejorado: {VAE_ID} ...")
-    return AutoencoderKL.from_pretrained(VAE_ID, torch_dtype=torch.float16)
+    return AutoencoderKL.from_pretrained(VAE_ID, torch_dtype=torch.float16, use_safetensors=True)
 
 
 def load_pipeline(pipeline_cls):
@@ -125,6 +125,7 @@ def load_pipeline(pipeline_cls):
         MODEL_ID,
         vae=vae,
         torch_dtype=torch.float16,
+        use_safetensors=True,
     )
 
     _apply_scheduler(pipe)

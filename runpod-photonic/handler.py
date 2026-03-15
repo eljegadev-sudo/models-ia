@@ -154,7 +154,7 @@ def _run_faceid(args: _Args, req: dict, t0: float) -> dict:
 
     vae = gp._load_vae()
     pipe = StableDiffusionXLPipeline.from_pretrained(
-        gp.MODEL_ID, vae=vae, torch_dtype=torch.float16,
+        gp.MODEL_ID, vae=vae, torch_dtype=torch.float16, use_safetensors=True,
     )
     gp._apply_scheduler(pipe)
     pipe.enable_vae_tiling()
