@@ -157,16 +157,20 @@ def _run_faceid(args: _Args, req: dict, t0: float) -> dict:
 
     def _load_faceid_pipe(_vae):
         _errors = []
-        for _kwargs in [{"use_safetensors": True}, {}]:
-            try:
-                p = StableDiffusionXLPipeline.from_pretrained(
-                    gp.MODEL_ID, vae=_vae, torch_dtype=torch.float16, **_kwargs,
-                )
-                print(f"  [faceid pipe] OK con {_kwargs}")
-                return p
-            except Exception as _e:
-                print(f"  [faceid pipe] intento {_kwargs} fallido: {_e}")
-                _errors.append(f"{_kwargs}: {_e}")
+        # Probar primero desde ruta local (evita bug sharded safetensors en diffusers)
+        _local = gp._get_local_snapshot_path(gp.MODEL_ID)
+        _sources = [_local] if _local else []
+        _sources.append(gp.MODEL_ID)
+        for _src in _sources:
+            for _kwargs in [{"use_safetensors": True}, {}]:
+                try:
+                    p = StableDiffusionXLPipeline.from_pretrained(
+                        _src, vae=_vae, torch_dtype=torch.float16, **_kwargs,
+                    )
+                    print(f"  [faceid pipe] OK: src={_src}, kwargs={_kwargs}")
+                    return p
+                except Exception as _e:
+                    _errors.append(f"src={_src},kwargs={_kwargs}: {_e}")
         raise RuntimeError("\n".join(_errors))
 
     try:

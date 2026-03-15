@@ -195,13 +195,48 @@ def _load_vae():
     raise RuntimeError(f"No se pudo cargar VAE: {VAE_ID}")
 
 
+def _get_local_snapshot_path(repo_id: str) -> str | None:
+    """Retorna la ruta local del snapshot cacheado, o None si no existe."""
+    hf_cache = Path(os.environ.get("HF_HOME", "/runpod-volume/hf_cache"))
+    snapshots_dir = hf_cache / "hub" / _repo_to_dir_name(repo_id) / "snapshots"
+    if not snapshots_dir.exists():
+        return None
+    for snap in snapshots_dir.iterdir():
+        if snap.is_dir() and (snap / "unet").exists():
+            return str(snap)
+    return None
+
+
 def _try_load_pipeline(pipeline_cls, vae):
-    """Intenta cargar el pipeline con diferentes configuraciones. Lanza excepcion con detalles si falla."""
+    """
+    Intenta cargar el pipeline.
+    Prueba primero desde la RUTA LOCAL del snapshot (evita bug de diffusers con sharded models),
+    luego desde el repo ID como fallback.
+    """
     errors = []
-    for kwargs in [
-        {"use_safetensors": True},
-        {},
-    ]:
+
+    # Estrategia 1: cargar desde ruta local del snapshot (evita bug sharded safetensors)
+    local_path = _get_local_snapshot_path(MODEL_ID)
+    if local_path:
+        print(f"  [modelo] Intentando carga desde ruta local: {local_path}")
+        for kwargs in [{"use_safetensors": True}, {}]:
+            try:
+                pipe = pipeline_cls.from_pretrained(
+                    local_path,
+                    vae=vae,
+                    torch_dtype=torch.float16,
+                    **kwargs,
+                )
+                print(f"  [modelo] OK desde ruta local con kwargs={kwargs}")
+                return pipe
+            except Exception as e:
+                msg = f"local_path+{kwargs}: {e}"
+                print(f"  [modelo] intento fallido: {msg}")
+                errors.append(msg)
+
+    # Estrategia 2: cargar desde repo ID (permite descarga fresca si no hay cache)
+    print(f"  [modelo] Intentando carga desde repo ID: {MODEL_ID}")
+    for kwargs in [{"use_safetensors": True}, {}]:
         try:
             pipe = pipeline_cls.from_pretrained(
                 MODEL_ID,
@@ -209,12 +244,13 @@ def _try_load_pipeline(pipeline_cls, vae):
                 torch_dtype=torch.float16,
                 **kwargs,
             )
-            print(f"  [modelo] OK con kwargs={kwargs}")
+            print(f"  [modelo] OK desde repo ID con kwargs={kwargs}")
             return pipe
         except Exception as e:
-            msg = f"kwargs={kwargs}: {e}"
+            msg = f"repo_id+{kwargs}: {e}"
             print(f"  [modelo] intento fallido: {msg}")
             errors.append(msg)
+
     raise RuntimeError("\n".join(errors))
 
 
@@ -222,7 +258,6 @@ def load_pipeline(pipeline_cls):
     """Carga Photonic Fusion SDXL con VAE mejorado + cpu_offload."""
     print(f"[modelo] Iniciando carga de {MODEL_ID} ...")
 
-    # Primer intento: verificar cache ligero
     _verify_and_clean_model_cache(MODEL_ID)
     vae = _load_vae()
 
@@ -230,16 +265,15 @@ def load_pipeline(pipeline_cls):
         pipe = _try_load_pipeline(pipeline_cls, vae)
     except RuntimeError as first_err:
         print(f"[modelo] Primer intento fallido:\n{first_err}")
-        print("[modelo] Limpieza nuclear del cache y reintento (esto descarga ~7 GB)...")
+        print("[modelo] Limpieza nuclear del cache y reintento (descarga ~7 GB, ~10-15 min)...")
         _nuclear_clean_model_cache(MODEL_ID)
-        # Recargar VAE tambien por si su cache es problematico
         vae = _load_vae()
         try:
             pipe = _try_load_pipeline(pipeline_cls, vae)
         except RuntimeError as second_err:
             raise RuntimeError(
                 f"No se pudo cargar {MODEL_ID} ni tras limpiar cache.\n"
-                f"Primer intento:\n{first_err}\n\nSegundo intento:\n{second_err}"
+                f"1er intento:\n{first_err}\n\n2do intento:\n{second_err}"
             )
 
     _apply_scheduler(pipe)
