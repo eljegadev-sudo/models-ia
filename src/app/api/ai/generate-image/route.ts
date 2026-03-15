@@ -6,8 +6,16 @@ import { prisma } from "@/lib/prisma";
 import { readFile } from "fs/promises";
 import path from "path";
 
+const UPLOADS_BASE =
+  process.env.UPLOAD_DIR ||
+  (process.env.NODE_ENV === "production"
+    ? "/data/uploads"
+    : path.join(process.cwd(), "public", "uploads"));
+
 async function localPathToDataUri(localPath: string): Promise<string> {
-  const filePath = path.join(process.cwd(), "public", localPath);
+  // localPath is like "/uploads/generated/xxx.png" or "/uploads/profiles/xxx.jpg"
+  const relativePath = localPath.replace(/^\/uploads\//, "");
+  const filePath = path.join(UPLOADS_BASE, relativePath);
   const buffer = await readFile(filePath);
   const ext = path.extname(filePath).slice(1) || "png";
   const mime = ext === "jpg" ? "image/jpeg" : `image/${ext}`;
