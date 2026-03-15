@@ -41,6 +41,10 @@ COPY --from=build /app/public /app/public
 # Copy Prisma schema (needed for migration commands)
 COPY --from=build /app/prisma /app/prisma
 
+# Copy Prisma query engine binaries (NOT included in Next.js standalone trace)
+COPY --from=build /app/node_modules/.prisma /app/node_modules/.prisma
+COPY --from=build /app/node_modules/@prisma/client /app/node_modules/@prisma/client
+
 EXPOSE 3000
 ENV HOSTNAME="0.0.0.0"
 ENV PORT=3000
