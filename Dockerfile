@@ -56,4 +56,6 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # Prevent unhandled rejections from crashing the process silently
 ENV NODE_OPTIONS="--unhandled-rejections=warn"
 
-CMD [ "node", "server.js" ]
+# Symlink /app/public/uploads -> /data/uploads so Next.js static serving
+# and upload writes both point to the persistent Fly.io volume
+CMD ["/bin/sh", "-c", "mkdir -p /data/uploads && rm -rf /app/public/uploads && ln -sf /data/uploads /app/public/uploads && node server.js"]

@@ -3,7 +3,11 @@ import { existsSync } from "fs";
 import path from "path";
 import { v4 as uuidv4 } from "uuid";
 
-const UPLOAD_DIR = process.env.UPLOAD_DIR || "./public/uploads";
+// In production (Fly.io) uploads go to the persistent volume at /data/uploads
+// A symlink /app/public/uploads -> /data/uploads is created at container startup
+const UPLOAD_DIR =
+  process.env.UPLOAD_DIR ||
+  (process.env.NODE_ENV === "production" ? "/data/uploads" : "./public/uploads");
 
 async function ensureDir(dir: string) {
   if (!existsSync(dir)) {

@@ -291,7 +291,10 @@ MEDIA - marcadores especiales (SOLO cuando el cliente lo PIDA):
 
   const isCensoredResponse = (text: string): boolean => {
     const lower = text.toLowerCase().trim();
-    if (/\b(?:ia|inteligencia artificial|modelo de lenguaje|language model|ai assistant)\b/i.test(lower)) return true;
+    // Only flag self-referential AI statements, NOT mentions of "IA" as a topic
+    if (/\bsoy (?:una? )?(?:ia|inteligencia artificial|modelo de lenguaje|language model|ai assistant)\b/i.test(lower)) return true;
+    if (/\bcomo (?:ia|inteligencia artificial|modelo de lenguaje)\b/i.test(lower)) return true;
+    if (/\b(?:modelo de lenguaje|language model|ai assistant)\b/i.test(lower)) return true;
     if (/\b(?:pol[ií]ticas?|restricciones?|guidelines|content policy)\b/i.test(lower)) return true;
     if (/(?:i can'?t|i cannot|i am unable|i'?m not able)/i.test(lower)) return true;
     if (/no puedo\b/i.test(lower) && lower.length < 120) return true;
