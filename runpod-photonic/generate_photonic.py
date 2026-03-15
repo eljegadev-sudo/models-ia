@@ -262,17 +262,35 @@ def _get_local_snapshot_path(repo_id: str) -> str | None:
 
 def _try_load_pipeline(pipeline_cls, vae):
     """
-    Intenta cargar el pipeline.
-    Prueba primero desde la RUTA LOCAL del snapshot (evita bug de diffusers con sharded models),
-    luego desde el repo ID como fallback.
+    Intenta cargar el pipeline con multiples estrategias.
+    Si todo falla, lanza RuntimeError con stack traces completos.
     """
+    import traceback as _tb
     errors = []
 
-    # Estrategia 1: cargar desde ruta local del snapshot (evita bug sharded safetensors)
+    # Estrategia 0: cargar UNet directamente para diagnosticar
     local_path = _get_local_snapshot_path(MODEL_ID)
     if local_path:
-        print(f"  [modelo] Intentando carga desde ruta local: {local_path}")
-        for kwargs in [{"use_safetensors": True}, {}]:
+        print(f"  [modelo] Probando carga directa del UNet para diagnostico...")
+        try:
+            from diffusers import UNet2DConditionModel
+            unet = UNet2DConditionModel.from_pretrained(
+                local_path,
+                subfolder="unet",
+                torch_dtype=torch.float16,
+                use_safetensors=True,
+                local_files_only=True,
+            )
+            print(f"  [modelo] UNet cargado OK directamente: {type(unet)}")
+            del unet
+            import gc; gc.collect()
+        except Exception as e:
+            print(f"  [modelo] UNet directo fallido: {e}\n{_tb.format_exc()}")
+
+    # Estrategia 1: cargar desde ruta local del snapshot
+    if local_path:
+        print(f"  [modelo] Intentando pipeline desde ruta local: {local_path}")
+        for kwargs in [{"use_safetensors": True}, {"local_files_only": True}, {}]:
             try:
                 pipe = pipeline_cls.from_pretrained(
                     local_path,
@@ -283,12 +301,12 @@ def _try_load_pipeline(pipeline_cls, vae):
                 print(f"  [modelo] OK desde ruta local con kwargs={kwargs}")
                 return pipe
             except Exception as e:
-                msg = f"local_path+{kwargs}: {e}"
-                print(f"  [modelo] intento fallido: {msg}")
+                msg = f"local_path+{kwargs}: {e}\n{_tb.format_exc()}"
+                print(f"  [modelo] intento fallido: local_path+{kwargs}: {e}")
                 errors.append(msg)
 
-    # Estrategia 2: cargar desde repo ID (permite descarga fresca si no hay cache)
-    print(f"  [modelo] Intentando carga desde repo ID: {MODEL_ID}")
+    # Estrategia 2: cargar desde repo ID
+    print(f"  [modelo] Intentando desde repo ID: {MODEL_ID}")
     for kwargs in [{"use_safetensors": True}, {}]:
         try:
             pipe = pipeline_cls.from_pretrained(
@@ -300,11 +318,11 @@ def _try_load_pipeline(pipeline_cls, vae):
             print(f"  [modelo] OK desde repo ID con kwargs={kwargs}")
             return pipe
         except Exception as e:
-            msg = f"repo_id+{kwargs}: {e}"
-            print(f"  [modelo] intento fallido: {msg}")
+            msg = f"repo_id+{kwargs}: {e}\n{_tb.format_exc()}"
+            print(f"  [modelo] intento fallido: repo_id+{kwargs}: {e}")
             errors.append(msg)
 
-    raise RuntimeError("\n".join(errors))
+    raise RuntimeError("Todos los intentos fallaron:\n\n" + "\n\n---\n".join(errors))
 
 
 def load_pipeline(pipeline_cls):
