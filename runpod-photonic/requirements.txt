@@ -20,9 +20,9 @@ requests>=2.31.0
 
 # ---- HuggingFace ----
 huggingface-hub>=0.21.0
-transformers==4.38.2
-diffusers==0.27.2
-accelerate==0.28.0
+transformers>=4.40.0
+diffusers>=0.30.0
+accelerate>=0.30.0
 
 # ---- Vision / Face ----
 opencv-python-headless>=4.9.0.80

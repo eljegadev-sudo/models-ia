@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import sys
 from pathlib import Path
 
 HF_HOME_DEFAULT = os.environ.get("HF_HOME", "/runpod-volume/hf_cache")
@@ -16,6 +17,61 @@ os.environ.setdefault("HF_HOME", HF_HOME_DEFAULT)
 
 import torch
 from PIL import Image
+
+
+# ---------------------------------------------------------------------------
+# Monkey patch: diffusers sharded safetensors en directorios locales
+# ---------------------------------------------------------------------------
+# diffusers < 0.30 tiene un bug donde _get_model_file no busca el index.json
+# cuando carga desde un directorio local, forzando el uso de .bin.
+# Este patch lo corrige buscando el index primero.
+# ---------------------------------------------------------------------------
+
+def _patch_diffusers_sharded_local():
+    """
+    Parchea diffusers._get_model_file para buscar .index.json en directorios
+    locales antes que el archivo de pesos directo. Esto habilita la carga de
+    modelos sharded (ej: photonic-fusion-sdxl UNet) desde cache local.
+    """
+    try:
+        from diffusers.utils import hub_utils
+
+        _orig = hub_utils._get_model_file
+
+        def _patched(pretrained_model_name_or_path, *, weights_name, subfolder=None, **kwargs):
+            pmnop = str(pretrained_model_name_or_path)
+            if os.path.isdir(pmnop):
+                check_dir = os.path.join(pmnop, subfolder) if subfolder else pmnop
+                # Buscar index de safetensors primero (sharded model)
+                for idx_name in [
+                    "diffusion_pytorch_model.safetensors.index.json",
+                    "model.safetensors.index.json",
+                    "diffusion_pytorch_model.bin.index.json",
+                    "model.bin.index.json",
+                ]:
+                    idx_path = os.path.join(check_dir, idx_name)
+                    real_exists = os.path.exists(idx_path)  # follows symlinks
+                    if real_exists:
+                        print(f"[patch] Usando index sharded: {idx_path}")
+                        return idx_path
+            return _orig(pretrained_model_name_or_path, weights_name=weights_name, subfolder=subfolder, **kwargs)
+
+        hub_utils._get_model_file = _patched
+
+        # Actualizar todas las referencias ya importadas
+        for mod_name, mod in list(sys.modules.items()):
+            if "diffusers" in mod_name and hasattr(mod, "_get_model_file"):
+                try:
+                    setattr(mod, "_get_model_file", _patched)
+                except Exception:
+                    pass
+
+        print("[patch] diffusers._get_model_file parcheado para sharded safetensors OK")
+    except Exception as e:
+        print(f"[patch] ADVERTENCIA: no se pudo parchear diffusers: {e}")
+
+
+_patch_diffusers_sharded_local()
 
 
 # ---------------------------------------------------------------------------
@@ -29,7 +85,7 @@ def _repo_to_dir_name(repo_id: str) -> str:
 
 
 # Tamaño minimo esperado para shards del UNet SDXL (~3.5 GB cada uno)
-_MIN_SHARD_BYTES = 500 * 1024 * 1024  # 500 MB (conservador)
+_MIN_SHARD_BYTES = 200 * 1024 * 1024  # 200 MB (conservador, shard 2 es ~269 MB)
 
 
 def _verify_and_clean_model_cache(repo_id: str) -> bool:
@@ -60,16 +116,34 @@ def _verify_and_clean_model_cache(repo_id: str) -> bool:
             cleaned = True
             continue
 
-        files = [f for f in unet_dir.iterdir() if f.is_file()]
-        # Verificar archivos safetensors con tamaño minimo valido
-        valid_st = [f for f in files if f.suffix == ".safetensors" and f.stat().st_size >= _MIN_SHARD_BYTES]
-        total_size_mb = sum(f.stat().st_size for f in files) / (1024 * 1024)
+        # Listar TODOS los archivos (siguiendo symlinks para tamaño real)
+        all_entries = list(unet_dir.iterdir())
+        print(f"[cache] Snapshot {snap_dir.name}: {len(all_entries)} entradas en unet/")
+        for entry in all_entries:
+            try:
+                is_sym = entry.is_symlink()
+                real_size = entry.stat().st_size if entry.exists() else -1
+                print(f"[cache]   {entry.name}: symlink={is_sym}, size={real_size/1024/1024:.1f}MB")
+            except Exception as ee:
+                print(f"[cache]   {entry.name}: ERROR al leer: {ee}")
 
-        print(f"[cache] Snapshot {snap_dir.name}: {len(files)} archivos en unet/, "
-              f"{len(valid_st)} safetensors validos, {total_size_mb:.0f} MB total")
+        # Archivos safetensors con tamaño minimo
+        st_files = [
+            e for e in all_entries
+            if e.name.endswith(".safetensors") and not e.name.startswith("diffusion_pytorch_model-00")
+            # Excluir shards (queremos verificar que el modelo tiene algo)
+        ]
+        shard_files = [
+            e for e in all_entries
+            if e.name.startswith("diffusion_pytorch_model-") and e.name.endswith(".safetensors")
+        ]
+        merged_file = unet_dir / "diffusion_pytorch_model.safetensors"
 
-        if len(valid_st) == 0:
-            print(f"[cache] Sin safetensors validos, limpiando snapshot: {snap_dir.name}")
+        print(f"[cache]   shards={len(shard_files)}, merged_exists={merged_file.exists()}")
+
+        # Si no hay shards ni archivo merged, snapshot es invalido
+        if len(shard_files) == 0 and not merged_file.exists():
+            print(f"[cache] Snapshot sin shards ni merged, limpiando: {snap_dir.name}")
             shutil.rmtree(str(snap_dir), ignore_errors=True)
             cleaned = True
 
@@ -84,17 +158,23 @@ def _nuclear_clean_model_cache(repo_id: str) -> None:
         print(f"[cache] NUCLEAR CLEAN: eliminando {model_dir}")
         try:
             shutil.rmtree(str(model_dir))
-            print(f"[cache] Eliminado OK, se descargara de nuevo (~7 GB, ~15 min)")
+            print(f"[cache] Eliminado OK con shutil.rmtree")
         except Exception as e:
             print(f"[cache] ERROR en shutil.rmtree: {e}. Intento file-by-file...")
+            deleted = 0
+            failed = 0
             for f in sorted(model_dir.rglob("*"), reverse=True):
                 try:
                     if f.is_symlink() or f.is_file():
                         f.unlink()
+                        deleted += 1
                     elif f.is_dir():
                         f.rmdir()
+                        deleted += 1
                 except Exception as fe:
-                    print(f"[cache]  skip {f}: {fe}")
+                    print(f"[cache]  skip {f.name}: {fe}")
+                    failed += 1
+            print(f"[cache] File-by-file: {deleted} eliminados, {failed} fallidos")
     else:
         print(f"[cache] No hay cache que limpiar para {repo_id}")
 
@@ -140,6 +220,7 @@ def diagnose_model_cache(repo_id: str) -> dict:
         result["snapshots"][snap.name] = snap_files
     return result
 
+
 # ---------------------------------------------------------------------------
 # Configuracion
 # ---------------------------------------------------------------------------
@@ -149,7 +230,7 @@ VAE_ID = "madebyollin/sdxl-vae-fp16-fix"
 
 FACEID_REPO = "h94/IP-Adapter-FaceID"
 FACEID_BIN = "ip-adapter-faceid-plusv2_sdxl.bin"
-CLIP_ENCODER = "laion/CLIP-ViT-H-14-laion2B-s32B-b79K"
+CLIP_ENCODER = "laion/CLIP-ViT-H-14-laion2B-s32K"
 
 CHECKPOINTS_DIR = Path(os.environ.get("CHECKPOINTS_DIR", "/runpod-volume/checkpoints"))
 INSWAPPER_URL = "https://huggingface.co/thebiglaskowski/inswapper_128.onnx/resolve/main/inswapper_128.onnx"
@@ -264,94 +345,156 @@ def _maybe_merge_unet_shards(snapshot_path: str) -> None:
     """
     Fusiona los shards del UNet en un solo archivo safetensors operando directamente
     sobre bytes (sin cargar tensores en memoria). Solo ocurre una vez.
-    diffusers 0.27.2 no puede cargar sharded safetensors desde directorios locales.
+    diffusers < 0.30 no puede cargar sharded safetensors desde directorios locales.
     """
     import json
     import struct
+    import traceback
+
+    print(f"[merge] === Verificando UNet en: {snapshot_path}")
 
     unet_dir = Path(snapshot_path) / "unet"
+    print(f"[merge] unet_dir={unet_dir}, exists={unet_dir.exists()}")
     if not unet_dir.exists():
+        print(f"[merge] unet_dir no existe, saliendo")
+        return
+
+    # Listar TODOS los archivos
+    try:
+        all_entries = list(unet_dir.iterdir())
+        print(f"[merge] Entradas en unet/ ({len(all_entries)}):")
+        for e in sorted(all_entries, key=lambda x: x.name):
+            is_sym = e.is_symlink()
+            real_exists = e.exists()  # follows symlinks
+            size = -1
+            if real_exists:
+                try:
+                    size = e.stat().st_size
+                except Exception:
+                    pass
+            print(f"[merge]   {e.name}: sym={is_sym}, real={real_exists}, size={size/1024/1024:.1f}MB" if size >= 0 else f"[merge]   {e.name}: sym={is_sym}, real={real_exists}")
+    except Exception as le:
+        print(f"[merge] ERROR al listar unet_dir: {le}")
         return
 
     merged_file = unet_dir / "diffusion_pytorch_model.safetensors"
-    if merged_file.exists() and merged_file.stat().st_size > 100_000_000:
-        print(f"[merge] UNet ya fusionado: {merged_file.stat().st_size / 1024**3:.2f} GB")
-        return
+    print(f"[merge] merged_file: exists={merged_file.exists()}, is_sym={merged_file.is_symlink()}")
+    if merged_file.exists():
+        try:
+            size = merged_file.stat().st_size
+            print(f"[merge] merged_file size={size/1024/1024:.0f}MB")
+            if size > 100_000_000:
+                print(f"[merge] Ya fusionado ({size/1024**3:.2f} GB), saltando merge")
+                return
+            else:
+                print(f"[merge] Archivo parcial ({size/1024/1024:.0f}MB), eliminando para re-fusionar")
+                merged_file.unlink()
+        except Exception as se:
+            print(f"[merge] ERROR al verificar merged_file: {se}")
 
     # Buscar shards (pueden ser symlinks)
     shard_files = sorted(
-        f for f in unet_dir.iterdir()
-        if f.name.startswith("diffusion_pytorch_model-") and f.name.endswith(".safetensors")
+        e for e in all_entries
+        if e.name.startswith("diffusion_pytorch_model-") and e.name.endswith(".safetensors")
     )
+    print(f"[merge] Shards encontrados: {len(shard_files)}: {[f.name for f in shard_files]}")
+
     if not shard_files:
-        print(f"[merge] No se encontraron shards en {unet_dir}")
-        print(f"[merge] Archivos en unet/: {[f.name for f in unet_dir.iterdir()]}")
+        # Intentar buscar de nuevo con glob directo
+        shard_files = sorted(unet_dir.glob("diffusion_pytorch_model-*.safetensors"))
+        print(f"[merge] Shards (glob directo): {len(shard_files)}: {[f.name for f in shard_files]}")
+
+    if not shard_files:
+        print(f"[merge] No se encontraron shards, no es necesario merge")
         return
 
-    total_mb = sum(f.stat().st_size for f in shard_files) / (1024 * 1024)
-    print(f"[merge] Iniciando fusion de {len(shard_files)} shards ({total_mb:.0f} MB) en un solo archivo")
-    print(f"[merge] Operacion en bytes (sin cargar tensores en RAM) - solo ocurre una vez")
+    total_mb = 0
+    for sf in shard_files:
+        try:
+            total_mb += sf.stat().st_size / (1024 * 1024)
+        except Exception:
+            pass
+    print(f"[merge] Iniciando fusion de {len(shard_files)} shards ({total_mb:.0f} MB total)")
+    print(f"[merge] Operacion byte-level (sin cargar tensores en RAM) - solo ocurre una vez")
 
     tmp_file = unet_dir / "diffusion_pytorch_model.safetensors.tmp"
     try:
-        # Paso 1: leer headers de cada shard para calcular offsets globales
+        # Paso 1: leer headers de cada shard
         shard_headers = []
         shard_header_sizes = []
         for shard in shard_files:
+            print(f"[merge]   Leyendo header de {shard.name}...")
             with open(str(shard), "rb") as f:
-                header_size = struct.unpack("<Q", f.read(8))[0]
-                header = json.loads(f.read(header_size).decode("utf-8"))
+                header_size_bytes = f.read(8)
+                if len(header_size_bytes) < 8:
+                    raise RuntimeError(f"Shard {shard.name} demasiado pequeño: {len(header_size_bytes)} bytes")
+                header_size = struct.unpack("<Q", header_size_bytes)[0]
+                header_raw = f.read(header_size)
+                header = json.loads(header_raw.decode("utf-8"))
             shard_headers.append(header)
             shard_header_sizes.append(header_size)
-            print(f"[merge]   shard {shard.name}: {len(header)} keys, header={header_size} bytes")
+            tensor_count = sum(1 for k in header if k != "__metadata__")
+            print(f"[merge]   {shard.name}: {tensor_count} tensores, header={header_size} bytes")
 
         # Paso 2: construir header fusionado con offsets recalculados
         merged_header: dict = {"__metadata__": {}}
         global_data_offset = 0
-        for header in shard_headers:
-            for key, info in header.items():
-                if key == "__metadata__":
-                    continue
+        for i, header in enumerate(shard_headers):
+            tensor_keys = [k for k in header if k != "__metadata__"]
+            if not tensor_keys:
+                print(f"[merge]   Shard {i} no tiene tensores con offset")
+                continue
+            for key in tensor_keys:
+                info = header[key]
                 offsets = info["data_offsets"]
-                size = offsets[1] - offsets[0]
                 new_start = global_data_offset + offsets[0]
-                new_end = new_start + size
+                new_end = global_data_offset + offsets[1]
                 merged_header[key] = {**info, "data_offsets": [new_start, new_end]}
-            # El offset global avanza por el tamano de datos del shard
-            max_end = max(v["data_offsets"][1] for k, v in header.items() if k != "__metadata__") if any(k != "__metadata__" for k in header) else 0
+            # El offset global avanza por el tamaño de datos de este shard
+            max_end = max(header[k]["data_offsets"][1] for k in tensor_keys)
+            print(f"[merge]   Shard {i}: {len(tensor_keys)} tensores, datos={max_end/1024/1024:.0f}MB, offset_global={global_data_offset/1024/1024:.0f}MB")
             global_data_offset += max_end
 
-        # Paso 3: escribir archivo fusionado copiando bytes crudos de cada shard
-        header_bytes = json.dumps(merged_header, separators=(",", ":")).encode("utf-8")
-        print(f"[merge] Header fusionado: {len(merged_header) - 1} tensores, {len(header_bytes)} bytes")
+        total_tensors = sum(1 for k in merged_header if k != "__metadata__")
+        print(f"[merge] Header fusionado: {total_tensors} tensores totales")
 
+        # Paso 3: serializar header fusionado
+        header_bytes = json.dumps(merged_header, separators=(",", ":")).encode("utf-8")
+        print(f"[merge] Header serializado: {len(header_bytes)} bytes")
+
+        # Paso 4: escribir archivo fusionado
+        print(f"[merge] Escribiendo {tmp_file.name}...")
         with open(str(tmp_file), "wb") as out:
             out.write(struct.pack("<Q", len(header_bytes)))
             out.write(header_bytes)
+            bytes_written = 0
             for shard, h_size in zip(shard_files, shard_header_sizes):
-                print(f"[merge]   copiando bytes de {shard.name}...")
+                print(f"[merge]   Copiando bytes de {shard.name}...")
                 with open(str(shard), "rb") as inp:
                     inp.seek(8 + h_size)  # Saltar header del shard
-                    CHUNK = 64 * 1024 * 1024  # 64 MB chunks
+                    CHUNK = 64 * 1024 * 1024  # 64 MB
                     while True:
                         chunk = inp.read(CHUNK)
                         if not chunk:
                             break
                         out.write(chunk)
+                        bytes_written += len(chunk)
+                print(f"[merge]   {shard.name} copiado, total escrito: {bytes_written/1024/1024:.0f}MB")
 
         # Renombrar atomicamente
         tmp_file.rename(merged_file)
         size_gb = merged_file.stat().st_size / 1024**3
-        print(f"[merge] Fusion completa: {merged_file} ({size_gb:.2f} GB)")
+        print(f"[merge] === Fusion COMPLETA: {merged_file.name} ({size_gb:.2f} GB)")
 
     except Exception as e:
-        print(f"[merge] ERROR: {e}")
-        import traceback
+        print(f"[merge] === ERROR en fusion: {e}")
         traceback.print_exc()
         if tmp_file.exists():
-            tmp_file.unlink()
-        if merged_file.exists() and merged_file.stat().st_size < 100_000_000:
-            merged_file.unlink()
+            try:
+                tmp_file.unlink()
+            except Exception:
+                pass
+        # No eliminar merged_file si existe (podría ser un intento previo válido)
 
 
 def _try_load_pipeline(pipeline_cls, vae):
@@ -362,24 +505,11 @@ def _try_load_pipeline(pipeline_cls, vae):
     import traceback as _tb
     errors = []
 
-    # Estrategia 0: cargar UNet directamente para diagnosticar
+    # Siempre intentar merge antes de cargar (idempotente si ya está hecho)
     local_path = _get_local_snapshot_path(MODEL_ID)
     if local_path:
-        print(f"  [modelo] Probando carga directa del UNet para diagnostico...")
-        try:
-            from diffusers import UNet2DConditionModel
-            unet = UNet2DConditionModel.from_pretrained(
-                local_path,
-                subfolder="unet",
-                torch_dtype=torch.float16,
-                use_safetensors=True,
-                local_files_only=True,
-            )
-            print(f"  [modelo] UNet cargado OK directamente: {type(unet)}")
-            del unet
-            import gc; gc.collect()
-        except Exception as e:
-            print(f"  [modelo] UNet directo fallido: {e}\n{_tb.format_exc()}")
+        print(f"  [try_load] Ejecutando merge check en: {local_path}")
+        _maybe_merge_unet_shards(local_path)
 
     # Estrategia 1: cargar desde ruta local del snapshot
     if local_path:
@@ -399,7 +529,7 @@ def _try_load_pipeline(pipeline_cls, vae):
                 print(f"  [modelo] intento fallido: local_path+{kwargs}: {e}")
                 errors.append(msg)
 
-    # Estrategia 2: cargar desde repo ID
+    # Estrategia 2: cargar desde repo ID (con descarga si no está en cache)
     print(f"  [modelo] Intentando desde repo ID: {MODEL_ID}")
     for kwargs in [{"use_safetensors": True}, {}]:
         try:
@@ -421,29 +551,51 @@ def _try_load_pipeline(pipeline_cls, vae):
 
 def load_pipeline(pipeline_cls):
     """Carga Photonic Fusion SDXL con VAE mejorado + cpu_offload."""
+    import traceback as _tb
     print(f"[modelo] Iniciando carga de {MODEL_ID} ...")
 
     _verify_and_clean_model_cache(MODEL_ID)
 
-    # Fusionar shards del UNet si es necesario (fix para diffusers 0.27.2)
+    # Ejecutar merge ANTES de cualquier intento de carga
     snap_path = _get_local_snapshot_path(MODEL_ID)
+    print(f"[modelo] Snapshot local: {snap_path}")
     if snap_path:
         _maybe_merge_unet_shards(snap_path)
+    else:
+        print(f"[modelo] No hay snapshot local, se descargara en _try_load_pipeline")
 
     vae = _load_vae()
 
     try:
         pipe = _try_load_pipeline(pipeline_cls, vae)
     except RuntimeError as first_err:
-        print(f"[modelo] Primer intento fallido: {str(first_err)[:200]}")
-        print("[modelo] Limpieza nuclear del cache y reintento (descarga ~7 GB, ~15 min)...")
+        print(f"\n[modelo] === Primer intento fallido ===")
+        print(str(first_err)[:1000])
+        print("[modelo] Intentando nuclear clean + snapshot_download + merge + retry...")
         _nuclear_clean_model_cache(MODEL_ID)
-        # Esperar a que el modelo se re-descargue (triggera la descarga via from_pretrained)
-        # Hacer primero un from_pretrained rapido para triggear la descarga
-        vae = _load_vae()
+
+        # Usar snapshot_download para descarga explícita y controlada
+        print("[modelo] Descargando modelo con snapshot_download (~10 GB, tardara 15-30 min)...")
+        try:
+            from huggingface_hub import snapshot_download
+            snap_path2_raw = snapshot_download(
+                MODEL_ID,
+                local_dir=None,  # Usar cache HF estándar
+                ignore_patterns=["*.msgpack", "*.ckpt", "flax_model*"],
+            )
+            print(f"[modelo] snapshot_download OK: {snap_path2_raw}")
+        except Exception as dl_err:
+            print(f"[modelo] snapshot_download fallido: {dl_err}")
+            _tb.print_exc()
+
         snap_path2 = _get_local_snapshot_path(MODEL_ID)
+        print(f"[modelo] Snapshot local post-descarga: {snap_path2}")
         if snap_path2:
             _maybe_merge_unet_shards(snap_path2)
+        else:
+            print("[modelo] ADVERTENCIA: no se encontro snapshot tras descarga")
+
+        vae = _load_vae()
         try:
             pipe = _try_load_pipeline(pipeline_cls, vae)
         except RuntimeError as second_err:

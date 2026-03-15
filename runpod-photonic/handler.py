@@ -179,8 +179,24 @@ def _run_faceid(args: _Args, req: dict, t0: float) -> dict:
     try:
         pipe = _load_faceid_pipe(vae)
     except RuntimeError as _fe:
-        print(f"[faceid] Primer intento fallido, limpieza nuclear y reintento...\n{_fe}")
+        import traceback as _tb
+        print(f"[faceid] Primer intento fallido:\n{_fe}")
+        print("[faceid] Nuclear clean + snapshot_download + merge + reintento...")
         gp._nuclear_clean_model_cache(gp.MODEL_ID)
+        try:
+            from huggingface_hub import snapshot_download
+            snap_dl = snapshot_download(
+                gp.MODEL_ID,
+                local_dir=None,
+                ignore_patterns=["*.msgpack", "*.ckpt", "flax_model*"],
+            )
+            print(f"[faceid] snapshot_download OK: {snap_dl}")
+        except Exception as _dl_e:
+            print(f"[faceid] snapshot_download fallido: {_dl_e}")
+            _tb.print_exc()
+        snap_retry = gp._get_local_snapshot_path(gp.MODEL_ID)
+        if snap_retry:
+            gp._maybe_merge_unet_shards(snap_retry)
         vae = gp._load_vae()
         pipe = _load_faceid_pipe(vae)
     gp._apply_scheduler(pipe)
