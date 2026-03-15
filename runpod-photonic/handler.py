@@ -283,9 +283,22 @@ def handler(job: dict) -> dict:
 
     try:
         if mode == "diagnose":
-            # Modo diagnostico: retorna info del cache sin cargar modelos
+            # Modo diagnostico: retorna info del cache + source code relevante
+            import inspect
             diag = gp.diagnose_model_cache(gp.MODEL_ID)
             diag["vae_cache"] = gp.diagnose_model_cache(gp.VAE_ID)
+            try:
+                from diffusers.utils import hub_utils
+                diag["hub_utils_get_model_file_src"] = inspect.getsource(hub_utils._get_model_file)
+            except Exception as e:
+                diag["hub_utils_src_error"] = str(e)
+            try:
+                from diffusers.models import modeling_utils
+                src = inspect.getsource(modeling_utils.ModelMixin.from_pretrained)
+                # Solo primeras 3000 chars para no exceder el output
+                diag["modeling_utils_from_pretrained_src"] = src[:3000]
+            except Exception as e:
+                diag["modeling_utils_src_error"] = str(e)
             return {"diagnose": diag}
         elif mode == "txt2img":
             return _run_txt2img(args, t0)
