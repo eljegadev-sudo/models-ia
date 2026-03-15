@@ -13,6 +13,27 @@ import tempfile
 import time
 from pathlib import Path
 
+# ---------------------------------------------------------------------------
+# Compatibility patch: gfpgan uses cached_download which was removed in
+# huggingface_hub >= 0.17.0. Patch it before any gfpgan import.
+# ---------------------------------------------------------------------------
+import huggingface_hub as _hf_hub
+if not hasattr(_hf_hub, "cached_download"):
+    import urllib.request as _urllib_req
+
+    def _cached_download_compat(url: str, *args, **kwargs):
+        """Minimal replacement: download URL to a temp file and return its path."""
+        cache_dir = kwargs.get("cache_dir", tempfile.gettempdir())
+        os.makedirs(cache_dir, exist_ok=True)
+        filename = url.split("/")[-1].split("?")[0]
+        dest = os.path.join(cache_dir, filename)
+        if not os.path.exists(dest):
+            print(f"[compat] Downloading {url} -> {dest}")
+            _urllib_req.urlretrieve(url, dest)
+        return dest
+
+    _hf_hub.cached_download = _cached_download_compat
+
 import runpod
 
 # Agregar el directorio actual al path para importar generate_photonic

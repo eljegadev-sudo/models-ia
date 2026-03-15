@@ -7,7 +7,8 @@ Pillow>=10.0.0
 opencv-python-headless>=4.9.0.80
 insightface==0.7.3
 onnxruntime-gpu==1.17.1
-gfpgan==1.3.8
+# gfpgan 1.3.8 has cached_download issue - use latest from git which has fixes
+git+https://github.com/TencentARC/GFPGAN.git
 basicsr>=1.4.2
 facexlib>=0.3.0
 realesrgan>=0.3.0
