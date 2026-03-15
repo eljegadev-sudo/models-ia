@@ -16,11 +16,11 @@ primary_region = 'iad'
   processes = ['app']
 
   [[http_service.checks]]
-    grace_period = '15s'
-    interval = '30s'
+    grace_period = '10s'
+    interval = '15s'
     method = 'GET'
-    timeout = '10s'
-    path = '/'
+    timeout = '5s'
+    path = '/api/health'
 
 [[vm]]
   memory = '1gb'
