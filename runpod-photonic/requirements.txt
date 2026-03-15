@@ -1,10 +1,11 @@
 runpod>=1.7.9
 
 # ---- Core numeric / ML stack ----
-# Pin numpy<2 to avoid "compiled with NumPy 1.x cannot run in NumPy 2.x" errors
-numpy<2.0
-scipy>=1.11.0
-scikit-image>=0.21.0
+# Explicit pin to prevent any package from upgrading to numpy 2.x
+# (torch 2.2.1 was compiled with numpy 1.x C API)
+numpy==1.26.4
+scipy==1.13.1
+scikit-image==0.22.0
 Pillow>=10.0.0
 safetensors>=0.4.0
 einops>=0.7.0
@@ -22,9 +23,6 @@ huggingface-hub>=0.21.0
 transformers==4.38.2
 diffusers==0.27.2
 accelerate==0.28.0
-
-# ---- xformers (memory-efficient attention for SDXL) ----
-xformers
 
 # ---- Vision / Face ----
 opencv-python-headless>=4.9.0.80

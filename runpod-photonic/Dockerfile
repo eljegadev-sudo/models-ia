@@ -18,12 +18,10 @@ RUN apt-get update -qq && \
         wget \
     && rm -rf /var/lib/apt/lists/*
 
-# Pin numpy<2 first (before anything else) to avoid NumPy 2.x binary incompatibility
-RUN pip install --no-cache-dir "numpy<2.0"
-
 # Install Python dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt && \
+    pip install --force-reinstall --no-cache-dir "numpy==1.26.4"
 
 # Patch huggingface_hub.cached_download via sitecustomize.py so it runs at
 # Python startup (before any import), fixing gfpgan compatibility with
