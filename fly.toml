@@ -1,0 +1,34 @@
+app = 'models-ia'
+primary_region = 'iad'
+
+[build]
+
+[env]
+  PORT = '3000'
+  NEXT_TELEMETRY_DISABLED = '1'
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ['app']
+
+  [[http_service.checks]]
+    grace_period = '15s'
+    interval = '30s'
+    method = 'GET'
+    timeout = '10s'
+    path = '/'
+
+[[vm]]
+  memory = '1gb'
+  cpu_kind = 'shared'
+  cpus = 1
+  swap_size_mb = 512
+
+[[mounts]]
+  source = 'uploads_data'
+  destination = '/data/uploads'
+  initial_size = '3gb'

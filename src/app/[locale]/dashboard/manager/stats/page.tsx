@@ -177,16 +177,18 @@ export default async function StatsPage() {
 
   const topPosts = models
     .flatMap((m) =>
-      m.contentPosts.map((p) => ({
-        id: p.id,
-        imageUrl: p.imageUrl,
-        caption: p.caption,
-        modelName: m.name,
-        likes: p._count.likes,
-        comments: p._count.comments,
-        tips: p._count.tips,
-        tipRevenue: p.tips.reduce((s, t) => s + Number(t.amount), 0),
-      }))
+      m.contentPosts
+        .filter((p): p is typeof p & { imageUrl: string } => p.imageUrl != null)
+        .map((p) => ({
+          id: p.id,
+          imageUrl: p.imageUrl,
+          caption: p.caption,
+          modelName: m.name,
+          likes: p._count.likes,
+          comments: p._count.comments,
+          tips: p._count.tips,
+          tipRevenue: p.tips.reduce((s, t) => s + Number(t.amount), 0),
+        }))
     )
     .sort((a, b) => b.likes + b.tips - (a.likes + a.tips))
     .slice(0, 10);
