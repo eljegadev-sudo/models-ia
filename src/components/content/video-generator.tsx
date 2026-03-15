@@ -70,7 +70,7 @@ export function VideoGenerator({ model }: VideoGeneratorProps) {
   const [duration, setDuration] = useState("5s");
   const [videoModel, setVideoModel] = useState("wan-2.6-image-to-video");
   const [pollingIds, setPollingIds] = useState<Set<string>>(new Set());
-  const pollTimerRef = useRef<ReturnType<typeof setInterval>>();
+  const pollTimerRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
 
   useEffect(() => {
     loadVideos();
@@ -347,7 +347,7 @@ export function VideoGenerator({ model }: VideoGeneratorProps) {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Modelo de video</Label>
-              <Select value={videoModel} onValueChange={setVideoModel}>
+              <Select value={videoModel} onValueChange={(v) => setVideoModel(v ?? videoModel)}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -367,7 +367,7 @@ export function VideoGenerator({ model }: VideoGeneratorProps) {
             </div>
             <div className="space-y-2">
               <Label>Duracion</Label>
-              <Select value={duration} onValueChange={setDuration}>
+              <Select value={duration} onValueChange={(v) => setDuration(v ?? duration)}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>

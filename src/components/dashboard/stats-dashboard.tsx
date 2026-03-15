@@ -196,8 +196,8 @@ export function StatsDashboard({
                         tick={{ fill: "currentColor", fontSize: 11 }}
                       />
                       <Tooltip
-                        formatter={(value: number) => [formatCurrency(value), "Ingresos"]}
-                        labelFormatter={(label: string) => `Fecha: ${label}`}
+                        formatter={(value) => [formatCurrency(Number(value)), "Ingresos"]}
+                        labelFormatter={(label) => `Fecha: ${String(label)}`}
                         contentStyle={{
                           backgroundColor: "hsl(var(--card))",
                           border: "1px solid hsl(var(--border))",
@@ -244,9 +244,9 @@ export function StatsDashboard({
                           ))}
                         </Pie>
                         <Tooltip
-                          formatter={(value: number, name: string) => [
-                            formatCurrency(value),
-                            TYPE_LABELS[name] || name,
+                          formatter={(value, name) => [
+                            formatCurrency(Number(value)),
+                            TYPE_LABELS[String(name)] || String(name),
                           ]}
                           contentStyle={{
                             backgroundColor: "hsl(var(--card))",

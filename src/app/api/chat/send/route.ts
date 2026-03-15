@@ -698,7 +698,7 @@ async function extractAndSaveModelDay(
     try {
       const parsed = JSON.parse(existingDayContext);
       if (parsed.date === today && Array.isArray(parsed.events)) {
-        const existingSet = new Set(parsed.events);
+        const existingSet = new Set<string>(parsed.events as string[]);
         for (const e of events) {
           if (!existingSet.has(e)) existingSet.add(e);
         }
