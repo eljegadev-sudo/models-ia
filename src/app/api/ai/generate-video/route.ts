@@ -58,15 +58,15 @@ export async function POST(request: Request) {
 
     const selectedDuration = duration || "5s";
     const selectedModel = model || "wan-2.6-image-to-video";
-    const selectedAspectRatio = aspectRatio || "16:9";
 
     const imageForVenice = await imageUrlToDataUrl(imageUrl);
 
+    // venice.ts maneja automáticamente qué parámetros acepta cada modelo
     const quote = await quoteVideo({
       model: selectedModel,
       duration: selectedDuration,
       resolution,
-      aspectRatio: selectedAspectRatio,
+      aspectRatio: aspectRatio,
     });
 
     const result = await queueVideo({
@@ -75,7 +75,7 @@ export async function POST(request: Request) {
       duration: selectedDuration,
       imageUrl: imageForVenice,
       resolution,
-      aspectRatio: selectedAspectRatio,
+      aspectRatio: aspectRatio,
     });
 
     const videoGen = await prisma.videoGeneration.create({

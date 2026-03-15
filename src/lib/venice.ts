@@ -53,16 +53,68 @@ export function getChatModelList() {
 
 const VIDEO_API_BASE = `${VENICE_BASE_URL.replace("/v1", "")}/v1`;
 
-const VALID_DURATIONS = ["5s", "6s", "8s", "10s", "15s", "18s"] as const;
-
-const MODELS_NO_ASPECT_RATIO = new Set(["kling-o3-pro-image-to-video", "kling-o3-pro-text-to-video"]);
-const MODELS_NO_RESOLUTION = new Set(["kling-o3-pro-image-to-video", "kling-o3-pro-text-to-video"]);
-
-function modelSupportsAspectRatio(model: string): boolean {
-  return !MODELS_NO_ASPECT_RATIO.has(model);
+interface ModelVideoConfig {
+  durations: string[];
+  defaultDuration: string;
+  /** undefined = doesn't support aspect_ratio at all; array = supported values */
+  aspectRatios?: string[];
+  defaultAspectRatio?: string;
+  supportsResolution?: boolean;
 }
-function modelSupportsResolution(model: string): boolean {
-  return !MODELS_NO_RESOLUTION.has(model);
+
+const MODEL_VIDEO_CONFIG: Record<string, ModelVideoConfig> = {
+  "wan-2.6-image-to-video": {
+    durations: ["6s"],
+    defaultDuration: "6s",
+    aspectRatios: ["16:9"],
+    defaultAspectRatio: "16:9",
+    supportsResolution: true,
+  },
+  "wan-2.1-pro-image-to-video": {
+    durations: ["5s", "8s", "10s", "15s", "18s"],
+    defaultDuration: "5s",
+    aspectRatios: ["16:9"],
+    defaultAspectRatio: "16:9",
+    supportsResolution: true,
+  },
+  "ltx-2-19b-full-image-to-video": {
+    durations: ["5s", "10s", "15s"],
+    defaultDuration: "5s",
+    // no aspectRatios: model doesn't support aspect_ratio
+    supportsResolution: false,
+  },
+  "kling-o3-pro-image-to-video": {
+    durations: ["5s", "10s"],
+    defaultDuration: "5s",
+    // no aspectRatios: model doesn't support aspect_ratio
+    supportsResolution: false,
+  },
+};
+
+const DEFAULT_MODEL_CONFIG: ModelVideoConfig = {
+  durations: ["5s", "10s", "15s"],
+  defaultDuration: "5s",
+  supportsResolution: false,
+};
+
+function getModelConfig(model: string): ModelVideoConfig {
+  return MODEL_VIDEO_CONFIG[model] ?? DEFAULT_MODEL_CONFIG;
+}
+
+function getValidDuration(model: string, requested: string): string {
+  const cfg = getModelConfig(model);
+  return cfg.durations.includes(requested) ? requested : cfg.defaultDuration;
+}
+
+function getAspectRatioPayload(model: string, requested?: string): string | undefined {
+  const cfg = getModelConfig(model);
+  if (!cfg.aspectRatios) return undefined; // model doesn't support it
+  if (requested && cfg.aspectRatios.includes(requested)) return requested;
+  return cfg.defaultAspectRatio;
+}
+
+export function getModelDurations(model: string): string[] {
+  return getModelConfig(model).durations;
 }
 
 export async function quoteVideo(params: {
@@ -72,16 +124,13 @@ export async function quoteVideo(params: {
   aspectRatio?: string;
 }): Promise<number> {
   const model = params.model || "wan-2.6-image-to-video";
-  const duration = VALID_DURATIONS.includes(params.duration as (typeof VALID_DURATIONS)[number])
-    ? params.duration
-    : "5s";
+  const cfg = getModelConfig(model);
+  const duration = getValidDuration(model, params.duration);
+  const aspectRatio = getAspectRatioPayload(model, params.aspectRatio);
 
-  const payload: Record<string, unknown> = {
-    model,
-    duration,
-  };
-  if (params.resolution && modelSupportsResolution(model)) payload.resolution = params.resolution;
-  if (params.aspectRatio && modelSupportsAspectRatio(model)) payload.aspect_ratio = params.aspectRatio;
+  const payload: Record<string, unknown> = { model, duration };
+  if (aspectRatio) payload.aspect_ratio = aspectRatio;
+  if (params.resolution && cfg.supportsResolution) payload.resolution = params.resolution;
 
   const resp = await fetch(`${VIDEO_API_BASE}/video/quote`, {
     method: "POST",
@@ -108,9 +157,9 @@ export async function queueVideo(params: {
   audio?: boolean;
 }): Promise<{ queueId: string; model: string }> {
   const model = params.model || "wan-2.6-image-to-video";
-  const duration = VALID_DURATIONS.includes(params.duration as (typeof VALID_DURATIONS)[number])
-    ? params.duration
-    : "5s";
+  const cfg = getModelConfig(model);
+  const duration = getValidDuration(model, params.duration);
+  const aspectRatio = getAspectRatioPayload(model, params.aspectRatio);
 
   const payload: Record<string, unknown> = {
     model,
@@ -119,8 +168,8 @@ export async function queueVideo(params: {
     image_url: params.imageUrl,
     audio: params.audio ?? false,
   };
-  if (params.resolution && modelSupportsResolution(model)) payload.resolution = params.resolution;
-  if (params.aspectRatio && modelSupportsAspectRatio(model)) payload.aspect_ratio = params.aspectRatio;
+  if (aspectRatio) payload.aspect_ratio = aspectRatio;
+  if (params.resolution && cfg.supportsResolution) payload.resolution = params.resolution;
   if (params.negativePrompt) payload.negative_prompt = params.negativePrompt;
 
   const resp = await fetch(`${VIDEO_API_BASE}/video/queue`, {

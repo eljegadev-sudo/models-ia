@@ -46,14 +46,26 @@ const VIDEO_MODELS = [
   { id: "ltx-2-19b-full-image-to-video", name: "LTX 2 19B", quality: "Buena calidad", speed: "~1 min" },
 ];
 
-const DURATIONS = [
-  { value: "5s", label: "5 segundos" },
-  { value: "6s", label: "6 segundos" },
-  { value: "8s", label: "8 segundos" },
-  { value: "10s", label: "10 segundos" },
-  { value: "15s", label: "15 segundos" },
-  { value: "18s", label: "18 segundos" },
-];
+const ALL_DURATIONS: Record<string, string> = {
+  "5s": "5 segundos",
+  "6s": "6 segundos",
+  "8s": "8 segundos",
+  "10s": "10 segundos",
+  "15s": "15 segundos",
+  "18s": "18 segundos",
+};
+
+const MODEL_DURATIONS: Record<string, string[]> = {
+  "wan-2.6-image-to-video": ["6s"],
+  "wan-2.1-pro-image-to-video": ["5s", "8s", "10s", "15s", "18s"],
+  "ltx-2-19b-full-image-to-video": ["5s", "10s", "15s"],
+  "kling-o3-pro-image-to-video": ["5s", "10s"],
+};
+
+function getDefaultDuration(model: string): string {
+  const durations = MODEL_DURATIONS[model] ?? ["5s"];
+  return durations[0];
+}
 
 export function VideoGenerator({ model }: VideoGeneratorProps) {
   const router = useRouter();
@@ -67,8 +79,8 @@ export function VideoGenerator({ model }: VideoGeneratorProps) {
   const [imageOptions, setImageOptions] = useState<typeof availableImages>(availableImages);
   const [prompt, setPrompt] = useState("");
   const [imageGenPrompt, setImageGenPrompt] = useState("");
-  const [duration, setDuration] = useState("5s");
   const [videoModel, setVideoModel] = useState("wan-2.6-image-to-video");
+  const [duration, setDuration] = useState(() => getDefaultDuration("wan-2.6-image-to-video"));
   const [pollingIds, setPollingIds] = useState<Set<string>>(new Set());
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
 
@@ -347,7 +359,11 @@ export function VideoGenerator({ model }: VideoGeneratorProps) {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Modelo de video</Label>
-              <Select value={videoModel} onValueChange={(v) => setVideoModel(v ?? videoModel)}>
+              <Select value={videoModel} onValueChange={(v) => {
+                  const m = v ?? videoModel;
+                  setVideoModel(m);
+                  setDuration(getDefaultDuration(m));
+                }}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -372,9 +388,9 @@ export function VideoGenerator({ model }: VideoGeneratorProps) {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {DURATIONS.map((d) => (
-                    <SelectItem key={d.value} value={d.value}>
-                      {d.label}
+                  {(MODEL_DURATIONS[videoModel] ?? ["5s"]).map((d) => (
+                    <SelectItem key={d} value={d}>
+                      {ALL_DURATIONS[d] ?? d}
                     </SelectItem>
                   ))}
                 </SelectContent>
