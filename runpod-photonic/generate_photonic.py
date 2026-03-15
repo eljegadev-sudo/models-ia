@@ -28,11 +28,15 @@ def _repo_to_dir_name(repo_id: str) -> str:
     return "models--" + repo_id.replace("/", "--")
 
 
+# Tamaño minimo esperado para shards del UNet SDXL (~3.5 GB cada uno)
+_MIN_SHARD_BYTES = 500 * 1024 * 1024  # 500 MB (conservador)
+
+
 def _verify_and_clean_model_cache(repo_id: str) -> bool:
     """
     Verifica que el cache del modelo tiene archivos validos.
-    Si detecta snapshots incompletos (sin safetensors ni bin en unet), los borra.
-    Retorna True si el cache esta limpio (puede o no existir), False si se limpio algo.
+    Limpia snapshots con shards incompletos (archivos demasiado pequenos).
+    Retorna True si el cache esta limpio o no existe.
     """
     hf_cache = Path(os.environ.get("HF_HOME", "/runpod-volume/hf_cache"))
     model_dir = hf_cache / "hub" / _repo_to_dir_name(repo_id)
@@ -51,22 +55,37 @@ def _verify_and_clean_model_cache(repo_id: str) -> bool:
             continue
         unet_dir = snap_dir / "unet"
         if not unet_dir.exists():
+            print(f"[cache] Snapshot sin directorio unet/, limpiando: {snap_dir.name}")
+            shutil.rmtree(str(snap_dir), ignore_errors=True)
+            cleaned = True
             continue
 
-        files = list(unet_dir.iterdir())
-        has_safetensors = any(f.suffix == ".safetensors" for f in files if f.is_file())
-        has_valid_bin = any(f.name.endswith(".bin") and f.stat().st_size > 1_000_000 for f in files if f.is_file())
+        files = [f for f in unet_dir.iterdir() if f.is_file()]
+        # Verificar archivos safetensors con tamaño minimo valido
+        valid_st = [f for f in files if f.suffix == ".safetensors" and f.stat().st_size >= _MIN_SHARD_BYTES]
+        total_size_mb = sum(f.stat().st_size for f in files) / (1024 * 1024)
 
-        if not has_safetensors and not has_valid_bin:
-            print(f"[cache] Snapshot incompleto detectado, limpiando: {snap_dir.name}")
+        print(f"[cache] Snapshot {snap_dir.name}: {len(files)} archivos en unet/, "
+              f"{len(valid_st)} safetensors validos, {total_size_mb:.0f} MB total")
+
+        if len(valid_st) == 0:
+            print(f"[cache] Sin safetensors validos, limpiando snapshot: {snap_dir.name}")
             shutil.rmtree(str(snap_dir), ignore_errors=True)
-            # Limpiar tambien el ref de blobs para forzar re-descarga
             cleaned = True
-        else:
-            st_files = [f.name for f in files if f.suffix == ".safetensors"]
-            print(f"[cache] Snapshot OK {snap_dir.name}: {len(st_files)} safetensors en unet/")
 
     return not cleaned
+
+
+def _nuclear_clean_model_cache(repo_id: str) -> None:
+    """Elimina todo el cache del modelo para forzar re-descarga limpia."""
+    hf_cache = Path(os.environ.get("HF_HOME", "/runpod-volume/hf_cache"))
+    model_dir = hf_cache / "hub" / _repo_to_dir_name(repo_id)
+    if model_dir.exists():
+        print(f"[cache] NUCLEAR CLEAN: eliminando cache completo de {repo_id} ({model_dir})")
+        shutil.rmtree(str(model_dir), ignore_errors=True)
+        print(f"[cache] Cache eliminado, se descargara de nuevo (~7 GB, ~10-15 min)")
+    else:
+        print(f"[cache] No hay cache que limpiar para {repo_id}")
 
 # ---------------------------------------------------------------------------
 # Configuracion
@@ -176,19 +195,11 @@ def _load_vae():
     raise RuntimeError(f"No se pudo cargar VAE: {VAE_ID}")
 
 
-def load_pipeline(pipeline_cls):
-    """Carga Photonic Fusion SDXL con VAE mejorado + cpu_offload."""
-    # Verificar y limpiar cache corrupto antes de cargar
-    _verify_and_clean_model_cache(MODEL_ID)
-
-    vae = _load_vae()
-    print(f"[modelo] Cargando {MODEL_ID} ...")
-    # Intentar diferentes configuraciones de safetensors para compatibilidad maxima
+def _try_load_pipeline(pipeline_cls, vae):
+    """Intenta cargar el pipeline con diferentes configuraciones. Lanza excepcion con detalles si falla."""
     errors = []
     for kwargs in [
         {"use_safetensors": True},
-        {"use_safetensors": True, "variant": "fp16"},
-        {"variant": "fp16"},
         {},
     ]:
         try:
@@ -198,13 +209,38 @@ def load_pipeline(pipeline_cls):
                 torch_dtype=torch.float16,
                 **kwargs,
             )
-            print(f"  [modelo] OK con {kwargs}")
-            break
+            print(f"  [modelo] OK con kwargs={kwargs}")
+            return pipe
         except Exception as e:
-            print(f"  [modelo] intento {kwargs} fallido: {e}")
-            errors.append(f"{kwargs}: {e}")
-    else:
-        raise RuntimeError(f"No se pudo cargar el modelo {MODEL_ID}. Errores:\n" + "\n".join(errors))
+            msg = f"kwargs={kwargs}: {e}"
+            print(f"  [modelo] intento fallido: {msg}")
+            errors.append(msg)
+    raise RuntimeError("\n".join(errors))
+
+
+def load_pipeline(pipeline_cls):
+    """Carga Photonic Fusion SDXL con VAE mejorado + cpu_offload."""
+    print(f"[modelo] Iniciando carga de {MODEL_ID} ...")
+
+    # Primer intento: verificar cache ligero
+    _verify_and_clean_model_cache(MODEL_ID)
+    vae = _load_vae()
+
+    try:
+        pipe = _try_load_pipeline(pipeline_cls, vae)
+    except RuntimeError as first_err:
+        print(f"[modelo] Primer intento fallido:\n{first_err}")
+        print("[modelo] Limpieza nuclear del cache y reintento (esto descarga ~7 GB)...")
+        _nuclear_clean_model_cache(MODEL_ID)
+        # Recargar VAE tambien por si su cache es problematico
+        vae = _load_vae()
+        try:
+            pipe = _try_load_pipeline(pipeline_cls, vae)
+        except RuntimeError as second_err:
+            raise RuntimeError(
+                f"No se pudo cargar {MODEL_ID} ni tras limpiar cache.\n"
+                f"Primer intento:\n{first_err}\n\nSegundo intento:\n{second_err}"
+            )
 
     _apply_scheduler(pipe)
     pipe.enable_model_cpu_offload()

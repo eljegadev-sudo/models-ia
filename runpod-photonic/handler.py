@@ -154,19 +154,28 @@ def _run_faceid(args: _Args, req: dict, t0: float) -> dict:
 
     gp._verify_and_clean_model_cache(gp.MODEL_ID)
     vae = gp._load_vae()
-    _errors = []
-    for _kwargs in [{"use_safetensors": True}, {"use_safetensors": True, "variant": "fp16"}, {"variant": "fp16"}, {}]:
-        try:
-            pipe = StableDiffusionXLPipeline.from_pretrained(
-                gp.MODEL_ID, vae=vae, torch_dtype=torch.float16, **_kwargs,
-            )
-            print(f"  [faceid pipe] OK con {_kwargs}")
-            break
-        except Exception as _e:
-            print(f"  [faceid pipe] intento {_kwargs} fallido: {_e}")
-            _errors.append(f"{_kwargs}: {_e}")
-    else:
-        raise RuntimeError(f"No se pudo cargar el pipeline: {gp.MODEL_ID}\n" + "\n".join(_errors))
+
+    def _load_faceid_pipe(_vae):
+        _errors = []
+        for _kwargs in [{"use_safetensors": True}, {}]:
+            try:
+                p = StableDiffusionXLPipeline.from_pretrained(
+                    gp.MODEL_ID, vae=_vae, torch_dtype=torch.float16, **_kwargs,
+                )
+                print(f"  [faceid pipe] OK con {_kwargs}")
+                return p
+            except Exception as _e:
+                print(f"  [faceid pipe] intento {_kwargs} fallido: {_e}")
+                _errors.append(f"{_kwargs}: {_e}")
+        raise RuntimeError("\n".join(_errors))
+
+    try:
+        pipe = _load_faceid_pipe(vae)
+    except RuntimeError as _fe:
+        print(f"[faceid] Primer intento fallido, limpieza nuclear y reintento...\n{_fe}")
+        gp._nuclear_clean_model_cache(gp.MODEL_ID)
+        vae = gp._load_vae()
+        pipe = _load_faceid_pipe(vae)
     gp._apply_scheduler(pipe)
     pipe.enable_vae_tiling()
     gp._try_xformers(pipe)
