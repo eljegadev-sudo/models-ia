@@ -81,11 +81,64 @@ def _nuclear_clean_model_cache(repo_id: str) -> None:
     hf_cache = Path(os.environ.get("HF_HOME", "/runpod-volume/hf_cache"))
     model_dir = hf_cache / "hub" / _repo_to_dir_name(repo_id)
     if model_dir.exists():
-        print(f"[cache] NUCLEAR CLEAN: eliminando cache completo de {repo_id} ({model_dir})")
-        shutil.rmtree(str(model_dir), ignore_errors=True)
-        print(f"[cache] Cache eliminado, se descargara de nuevo (~7 GB, ~10-15 min)")
+        print(f"[cache] NUCLEAR CLEAN: eliminando {model_dir}")
+        try:
+            shutil.rmtree(str(model_dir))
+            print(f"[cache] Eliminado OK, se descargara de nuevo (~7 GB, ~15 min)")
+        except Exception as e:
+            print(f"[cache] ERROR en shutil.rmtree: {e}. Intento file-by-file...")
+            for f in sorted(model_dir.rglob("*"), reverse=True):
+                try:
+                    if f.is_symlink() or f.is_file():
+                        f.unlink()
+                    elif f.is_dir():
+                        f.rmdir()
+                except Exception as fe:
+                    print(f"[cache]  skip {f}: {fe}")
     else:
         print(f"[cache] No hay cache que limpiar para {repo_id}")
+
+
+def diagnose_model_cache(repo_id: str) -> dict:
+    """Retorna diagnostico detallado del cache del modelo."""
+    hf_cache = Path(os.environ.get("HF_HOME", "/runpod-volume/hf_cache"))
+    model_dir = hf_cache / "hub" / _repo_to_dir_name(repo_id)
+    result: dict = {
+        "hf_home": str(hf_cache),
+        "model_dir": str(model_dir),
+        "exists": model_dir.exists(),
+        "snapshots": {},
+    }
+    if not model_dir.exists():
+        return result
+    snapshots_dir = model_dir / "snapshots"
+    if not snapshots_dir.exists():
+        return result
+    for snap in snapshots_dir.iterdir():
+        if not snap.is_dir():
+            continue
+        snap_files: dict = {}
+        for sub in ["unet", "vae", "text_encoder", "text_encoder_2", "."]:
+            sub_dir = snap if sub == "." else snap / sub
+            if not sub_dir.exists():
+                continue
+            for f in sub_dir.iterdir():
+                if not f.is_file() and not f.is_symlink():
+                    continue
+                size_mb = 0
+                real_exists = False
+                try:
+                    size_mb = round(f.stat().st_size / 1024 / 1024, 1)
+                    real_exists = True
+                except Exception:
+                    pass
+                snap_files[f"{sub}/{f.name}"] = {
+                    "size_mb": size_mb,
+                    "is_symlink": f.is_symlink(),
+                    "real_exists": real_exists,
+                }
+        result["snapshots"][snap.name] = snap_files
+    return result
 
 # ---------------------------------------------------------------------------
 # Configuracion

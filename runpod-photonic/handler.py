@@ -282,7 +282,12 @@ def handler(job: dict) -> dict:
     args.output = "api_output.png"
 
     try:
-        if mode == "txt2img":
+        if mode == "diagnose":
+            # Modo diagnostico: retorna info del cache sin cargar modelos
+            diag = gp.diagnose_model_cache(gp.MODEL_ID)
+            diag["vae_cache"] = gp.diagnose_model_cache(gp.VAE_ID)
+            return {"diagnose": diag}
+        elif mode == "txt2img":
             return _run_txt2img(args, t0)
         elif mode == "img2img":
             if not inp.get("ref_image"):
