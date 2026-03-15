@@ -44,7 +44,9 @@ export default async function EditModelPage({
         ethnicity: model.ethnicity || undefined,
         height: model.height || undefined,
         subscriptionPrice: Number(model.subscriptionPrice),
+        exclusivityPrice: model.exclusivityPrice ? Number(model.exclusivityPrice) : 0,
         chatPersonality: model.chatPersonality || undefined,
+        backstory: model.backstory || undefined,
         chatAutomatic: model.chatAutomatic,
         referenceImages: model.referenceImages.map((img) => ({
           id: img.id,

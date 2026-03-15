@@ -34,6 +34,7 @@ enum TransactionType {
   TIP
   CONTENT_UNLOCK
   MESSAGE_UNLOCK
+  EXCLUSIVITY
 }
 
 enum TransactionStatus {
@@ -60,6 +61,11 @@ model User {
   receivedTransactions Transaction[]    @relation("TransactionTo")
   conversations        Conversation[]
   favorites            Favorite[]
+  postLikes            PostLike[]
+  postComments         PostComment[]
+  postTips             PostTip[]
+  savedPosts           SavedPost[]
+  notifications        Notification[]
 }
 
 model ModelProfile {
@@ -79,20 +85,24 @@ model ModelProfile {
   isActive          Boolean  @default(true)
   chatAutomatic     Boolean  @default(true)
   chatPersonality   String?  @db.Text
+  backstory         String?  @db.Text
   eroticLevel       Int      @default(3)
   voiceModelId      String?
   countryOfResidence String?
   timezone          String?  @default("America/New_York")
+  exclusiveOwnerId  String?
+  exclusivityPrice  Decimal? @default(0)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  referenceImages ReferenceImage[]
-  contentPosts    ContentPost[]
-  subscriptions   Subscription[]
-  conversations   Conversation[]
-  favorites       Favorite[]
-  stories         Story[]
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  referenceImages  ReferenceImage[]
+  contentPosts     ContentPost[]
+  subscriptions    Subscription[]
+  conversations    Conversation[]
+  favorites        Favorite[]
+  stories          Story[]
+  videoGenerations VideoGeneration[]
 
   @@index([userId])
 }
@@ -114,7 +124,9 @@ model ReferenceImage {
 model ContentPost {
   id             String        @id @default(cuid())
   modelProfileId String
-  imageUrl       String
+  imageUrl       String?
+  videoUrl       String?
+  contentType    String        @default("IMAGE")
   caption        String?       @db.Text
   isPrivate      Boolean       @default(false)
   price          Decimal       @default(0)
@@ -124,8 +136,81 @@ model ContentPost {
   updatedAt      DateTime      @updatedAt
 
   modelProfile ModelProfile @relation(fields: [modelProfileId], references: [id], onDelete: Cascade)
+  likes        PostLike[]
+  comments     PostComment[]
+  tips         PostTip[]
+  savedBy      SavedPost[]
 
   @@index([modelProfileId])
+}
+
+model PostLike {
+  id        String   @id @default(cuid())
+  userId    String
+  postId    String
+  createdAt DateTime @default(now())
+
+  user User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post ContentPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+  @@index([postId])
+}
+
+model PostComment {
+  id        String   @id @default(cuid())
+  userId    String
+  postId    String
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+
+  user User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post ContentPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+}
+
+model PostTip {
+  id        String   @id @default(cuid())
+  userId    String
+  postId    String
+  amount    Decimal  @default(0)
+  createdAt DateTime @default(now())
+
+  user User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post ContentPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+}
+
+model SavedPost {
+  id        String   @id @default(cuid())
+  userId    String
+  postId    String
+  createdAt DateTime @default(now())
+
+  user User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post ContentPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+  @@index([postId])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  title     String
+  body      String   @db.Text
+  imageUrl  String?
+  link      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, read])
 }
 
 model Subscription {
@@ -153,10 +238,12 @@ model Conversation {
   eroticLevel      Int       @default(3)
   preferredName    String?
   memoryContext    String?   @db.Text
+  modelDayContext  String?   @db.Text
   currentState     String?   @db.Text
-  lastMemoryUpdate DateTime?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  lastMemoryUpdate        DateTime?
+  pendingPhotoGeneration  Boolean   @default(false)
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
 
   client       User         @relation(fields: [clientId], references: [id], onDelete: Cascade)
   modelProfile ModelProfile @relation(fields: [modelProfileId], references: [id], onDelete: Cascade)
@@ -173,6 +260,7 @@ model Message {
   senderType     SenderType
   content        String?    @db.Text
   imageUrl       String?
+  videoUrl       String?
   audioUrl       String?
   isPaidContent  Boolean    @default(false)
   price          Decimal    @default(0)
@@ -209,9 +297,22 @@ model Story {
   createdAt      DateTime      @default(now())
 
   modelProfile ModelProfile @relation(fields: [modelProfileId], references: [id], onDelete: Cascade)
+  views        StoryView[]
 
   @@index([modelProfileId])
   @@index([expiresAt])
+}
+
+model StoryView {
+  id        String   @id @default(cuid())
+  storyId   String
+  userId    String
+  createdAt DateTime @default(now())
+
+  story Story @relation(fields: [storyId], references: [id], onDelete: Cascade)
+
+  @@unique([storyId, userId])
+  @@index([storyId])
 }
 
 model Transaction {
@@ -231,4 +332,26 @@ model Transaction {
 
   @@index([fromUserId])
   @@index([toUserId])
+}
+
+model VideoGeneration {
+  id             String        @id @default(cuid())
+  modelProfileId String
+  sourceImageUrl String
+  prompt         String        @db.Text
+  videoUrl       String?
+  status         String        @default("processing")
+  contentStatus  ContentStatus @default(PENDING)
+  duration       String        @default("5s")
+  model          String        @default("wan-2.6-image-to-video")
+  queueId        String?
+  quoteCost      Float?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  modelProfile ModelProfile @relation(fields: [modelProfileId], references: [id], onDelete: Cascade)
+
+  @@index([modelProfileId])
+  @@index([status])
+  @@index([contentStatus])
 }

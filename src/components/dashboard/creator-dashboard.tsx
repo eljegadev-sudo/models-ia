@@ -11,7 +11,12 @@ import {
   Plus,
   Settings,
   BarChart3,
+  TrendingUp,
+  MessageSquare,
+  Sparkles,
+  Video,
 } from "lucide-react";
+import NextImage from "next/image";
 
 interface CreatorDashboardProps {
   user: {
@@ -25,6 +30,7 @@ interface CreatorDashboardProps {
       subscriptionPrice: number;
       subscriberCount: number;
       contentCount: number;
+      imageUrl?: string | null;
     }[];
     receivedTransactions: {
       id: string;
@@ -54,12 +60,26 @@ export function CreatorDashboard({ user }: CreatorDashboardProps) {
           <h1 className="text-3xl font-bold">{t("title")}</h1>
           <p className="text-muted-foreground">{t("subtitle")}</p>
         </div>
-        <Button asChild className="gap-2">
-          <Link href="/dashboard/manager/models/new">
-            <Plus className="h-4 w-4" />
-            {t("createModel")}
-          </Link>
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" className="gap-2" asChild>
+            <Link href="/dashboard/manager/stats">
+              <BarChart3 className="h-4 w-4" />
+              Estadísticas
+            </Link>
+          </Button>
+          <Button variant="outline" className="gap-2" asChild>
+            <Link href="/dashboard/manager/earnings">
+              <DollarSign className="h-4 w-4" />
+              Ingresos
+            </Link>
+          </Button>
+          <Button className="gap-2" asChild>
+            <Link href="/dashboard/manager/models/new">
+              <Plus className="h-4 w-4" />
+              {t("createModel")}
+            </Link>
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">
@@ -94,10 +114,10 @@ export function CreatorDashboard({ user }: CreatorDashboardProps) {
             <CardTitle className="text-sm font-medium">
               {t("totalEarnings")}
             </CardTitle>
-            <BarChart3 className="h-4 w-4 text-muted-foreground" />
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-2xl font-bold text-green-500">
               ${totalEarnings.toFixed(2)}
             </div>
           </CardContent>
@@ -132,52 +152,75 @@ export function CreatorDashboard({ user }: CreatorDashboardProps) {
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {user.modelProfiles.map((model) => (
               <Card key={model.id} className="overflow-hidden">
-                <CardContent className="p-5">
-                  <div className="mb-3 flex items-start justify-between">
-                    <div>
-                      <h3 className="text-lg font-semibold">{model.name}</h3>
-                      <p className="text-sm text-muted-foreground">
-                        @{model.slug}
-                      </p>
-                    </div>
-                    <div
-                      className={`h-2.5 w-2.5 rounded-full ${
-                        model.isActive ? "bg-green-500" : "bg-muted"
-                      }`}
-                    />
-                  </div>
-                  <div className="mb-4 grid grid-cols-3 gap-2 text-center text-sm">
-                    <div>
-                      <div className="font-semibold">
-                        {model.subscriberCount}
+                <div className="flex gap-4 p-5">
+                  <div className="h-20 w-20 flex-shrink-0 overflow-hidden rounded-xl bg-muted">
+                    {model.imageUrl ? (
+                      <NextImage
+                        src={model.imageUrl}
+                        alt={model.name}
+                        width={80}
+                        height={80}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center">
+                        <ImageIcon className="h-8 w-8 text-muted-foreground" />
                       </div>
-                      <div className="text-xs text-muted-foreground">Subs</div>
-                    </div>
-                    <div>
-                      <div className="font-semibold">{model.contentCount}</div>
-                      <div className="text-xs text-muted-foreground">Posts</div>
-                    </div>
-                    <div>
-                      <div className="font-semibold">
-                        ${model.subscriptionPrice}
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between mb-2">
+                      <div>
+                        <h3 className="text-lg font-semibold">{model.name}</h3>
+                        <p className="text-sm text-muted-foreground">
+                          @{model.slug}
+                        </p>
                       </div>
-                      <div className="text-xs text-muted-foreground">Price</div>
+                      <div
+                        className={`h-2.5 w-2.5 rounded-full mt-1.5 ${
+                          model.isActive ? "bg-green-500" : "bg-muted-foreground/30"
+                        }`}
+                      />
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-center text-sm mb-3">
+                      <div>
+                        <div className="font-semibold">{model.subscriberCount}</div>
+                        <div className="text-xs text-muted-foreground">Subs</div>
+                      </div>
+                      <div>
+                        <div className="font-semibold">{model.contentCount}</div>
+                        <div className="text-xs text-muted-foreground">Posts</div>
+                      </div>
+                      <div>
+                        <div className="font-semibold">${model.subscriptionPrice}</div>
+                        <div className="text-xs text-muted-foreground">Precio</div>
+                      </div>
                     </div>
                   </div>
-                  <div className="flex gap-2">
-                    <Button size="sm" variant="outline" className="flex-1 gap-1" asChild>
-                      <Link href={`/dashboard/manager/models/${model.id}/content`}>
-                        <ImageIcon className="h-3.5 w-3.5" />
-                        Content
-                      </Link>
-                    </Button>
-                    <Button size="sm" variant="outline" className="gap-1" asChild>
-                      <Link href={`/dashboard/manager/models/${model.id}/edit`}>
-                        <Settings className="h-3.5 w-3.5" />
-                      </Link>
-                    </Button>
-                  </div>
-                </CardContent>
+                </div>
+                <div className="border-t px-5 py-3 flex gap-2">
+                  <Button size="sm" variant="outline" className="flex-1 gap-1" asChild>
+                    <Link href={`/dashboard/manager/models/${model.id}/content`}>
+                      <ImageIcon className="h-3.5 w-3.5" />
+                      Contenido
+                    </Link>
+                  </Button>
+                  <Button size="sm" variant="outline" className="gap-1" asChild>
+                    <Link href={`/dashboard/manager/models/${model.id}/stories`}>
+                      <Sparkles className="h-3.5 w-3.5" />
+                    </Link>
+                  </Button>
+                  <Button size="sm" variant="outline" className="gap-1" asChild>
+                    <Link href={`/dashboard/manager/models/${model.id}/chat`}>
+                      <MessageSquare className="h-3.5 w-3.5" />
+                    </Link>
+                  </Button>
+                  <Button size="sm" variant="outline" className="gap-1" asChild>
+                    <Link href={`/dashboard/manager/models/${model.id}/edit`}>
+                      <Settings className="h-3.5 w-3.5" />
+                    </Link>
+                  </Button>
+                </div>
               </Card>
             ))}
           </div>

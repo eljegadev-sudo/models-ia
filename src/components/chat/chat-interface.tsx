@@ -16,6 +16,8 @@ import {
   Play,
   Pause,
   Volume2,
+  ChevronDown,
+  Bot,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "@/i18n/navigation";
@@ -25,11 +27,20 @@ interface Message {
   senderType: "CLIENT" | "MODEL";
   content: string | null;
   imageUrl: string | null;
+  videoUrl?: string | null;
   audioUrl?: string | null;
   isPaidContent: boolean;
   price: number;
   isUnlocked: boolean;
   createdAt: Date;
+}
+
+interface ChatModel {
+  id: string;
+  name: string;
+  inputPrice: string;
+  outputPrice: string;
+  description: string;
 }
 
 interface ChatInterfaceProps {
@@ -108,15 +119,61 @@ export function ChatInterface({
   const [tipAmount, setTipAmount] = useState("");
   const [showTip, setShowTip] = useState(false);
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
+  const [chatModels, setChatModels] = useState<ChatModel[]>([]);
+  const [selectedModel, setSelectedModel] = useState<string>("llama-3.3-70b");
+  const [showModelSelector, setShowModelSelector] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const modelSelectorRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     loadConversation();
+    fetch("/api/chat/models")
+      .then((r) => r.json())
+      .then((models: ChatModel[]) => {
+        setChatModels(models);
+        if (models.length > 0 && !models.find((m) => m.id === selectedModel)) {
+          setSelectedModel(models[0].id);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (modelSelectorRef.current && !modelSelectorRef.current.contains(e.target as Node)) {
+        setShowModelSelector(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, typing]);
+
+  const sendingRef = useRef(false);
+
+  useEffect(() => {
+    if (!conversationId) return;
+    const interval = setInterval(async () => {
+      if (sendingRef.current) return;
+      try {
+        const res = await fetch(`/api/chat?modelProfileId=${modelProfileId}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const serverMessages: Message[] = data.messages || [];
+        setMessages((prev) => {
+          const nonTempCount = prev.filter((m) => !m.id.startsWith("temp-")).length;
+          if (serverMessages.length > nonTempCount) {
+            return serverMessages;
+          }
+          return prev;
+        });
+      } catch { /* silent */ }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [conversationId, modelProfileId]);
 
   const loadConversation = useCallback(async () => {
     try {
@@ -134,55 +191,61 @@ export function ChatInterface({
 
   async function sendMessage(e: React.FormEvent) {
     e.preventDefault();
-    if (!input.trim() || !conversationId || sending) return;
+    if (!input.trim() || !conversationId || sendingRef.current) return;
 
     const text = input.trim();
     setInput("");
+
+    const tempId = `temp-${Date.now()}`;
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: tempId,
+        senderType: "CLIENT",
+        content: text,
+        imageUrl: null,
+        isPaidContent: false,
+        price: 0,
+        isUnlocked: false,
+        createdAt: new Date(),
+      },
+    ]);
+
+    sendingRef.current = true;
     setSending(true);
-
-    const optimistic: Message = {
-      id: `temp-${Date.now()}`,
-      senderType: "CLIENT",
-      content: text,
-      imageUrl: null,
-      isPaidContent: false,
-      price: 0,
-      isUnlocked: false,
-      createdAt: new Date(),
-    };
-
-    setMessages((prev) => [...prev, optimistic]);
-
-    const typingDelay = 2000 + Math.random() * 4000;
-    await new Promise((r) => setTimeout(r, typingDelay));
     setTyping(true);
 
     try {
       const res = await fetch("/api/chat/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ conversationId, content: text }),
+        body: JSON.stringify({ conversationId, content: text, chatModel: selectedModel }),
       });
 
       if (!res.ok) throw new Error();
       const data = await res.json();
 
       setMessages((prev) => {
-        const filtered = prev.filter((m) => m.id !== optimistic.id);
-        const newMessages = [...filtered, data.userMessage];
-        if (data.aiMessages) {
-          newMessages.push(...data.aiMessages);
+        const withoutTemp = prev.filter((m) => m.id !== tempId);
+        const seen = new Set<string>(withoutTemp.map((m) => m.id));
+        const result = [...withoutTemp];
+        const incoming: Message[] = [data.userMessage];
+        if (data.aiMessages) incoming.push(...data.aiMessages);
+        if (data.aiResponse) incoming.push(data.aiResponse);
+        if (data.photoMessage) incoming.push(data.photoMessage);
+        for (const m of incoming) {
+          if (!seen.has(m.id)) {
+            seen.add(m.id);
+            result.push(m);
+          }
         }
-        // Legacy support
-        if (data.aiResponse) newMessages.push(data.aiResponse);
-        if (data.photoMessage) newMessages.push(data.photoMessage);
-        return newMessages;
+        return result;
       });
     } catch {
-      setMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
-      setInput(text);
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
       toast.error("Error al enviar mensaje");
     } finally {
+      sendingRef.current = false;
       setSending(false);
       setTyping(false);
     }
@@ -206,7 +269,11 @@ export function ChatInterface({
       }
 
       const data = await res.json();
-      setMessages((prev) => [...prev, data.message]);
+      setMessages((prev) => {
+        const next = [...prev, data.message];
+        if (data.aiResponse) next.push(data.aiResponse);
+        return next;
+      });
       setTipAmount("");
       setShowTip(false);
       toast.success(`Propina de $${amount.toFixed(2)} enviada!`);
@@ -248,19 +315,28 @@ export function ChatInterface({
 
     if (msg.isPaidContent && !msg.isUnlocked) {
       return (
-        <div className="flex h-64 w-64 flex-col items-center justify-center gap-3 rounded-xl bg-gradient-to-br from-pink-500/10 to-rose-500/10 border border-pink-500/20">
-          <Lock className="h-8 w-8 text-pink-500" />
-          <p className="text-xs text-muted-foreground">
-            {t("paidPhoto")}
-          </p>
-          <Button
-            size="sm"
-            onClick={() => unlockMessage(msg.id)}
-            className="gap-1.5 bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 border-0 text-white"
-          >
-            <DollarSign className="h-3.5 w-3.5" />
-            {t("unlockPhoto")} ${msg.price}
-          </Button>
+        <div className="relative h-72 w-64 overflow-hidden rounded-xl">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={msg.imageUrl}
+            alt=""
+            className="h-full w-full object-cover blur-xl scale-110"
+            loading="lazy"
+          />
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/30 backdrop-blur-sm">
+            <Lock className="h-8 w-8 text-white drop-shadow-lg" />
+            <p className="text-xs text-white/80 font-medium drop-shadow">
+              {t("paidPhoto")}
+            </p>
+            <Button
+              size="sm"
+              onClick={() => unlockMessage(msg.id)}
+              className="gap-1.5 bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 border-0 text-white shadow-lg"
+            >
+              <DollarSign className="h-3.5 w-3.5" />
+              {t("unlockPhoto")} ${msg.price}
+            </Button>
+          </div>
         </div>
       );
     }
@@ -278,6 +354,48 @@ export function ChatInterface({
           loading="lazy"
         />
       </button>
+    );
+  }
+
+  function renderVideo(msg: Message) {
+    if (!msg.videoUrl) return null;
+
+    if (msg.isPaidContent && !msg.isUnlocked) {
+      return (
+        <div className="relative h-72 w-64 overflow-hidden rounded-xl bg-black">
+          <video
+            src={msg.videoUrl}
+            className="h-full w-full object-cover blur-xl scale-110"
+            muted
+          />
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/30 backdrop-blur-sm">
+            <Lock className="h-8 w-8 text-white drop-shadow-lg" />
+            <p className="text-xs text-white/80 font-medium drop-shadow">
+              {t("paidPhoto")}
+            </p>
+            <Button
+              size="sm"
+              onClick={() => unlockMessage(msg.id)}
+              className="gap-1.5 bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 border-0 text-white shadow-lg"
+            >
+              <DollarSign className="h-3.5 w-3.5" />
+              {t("unlockPhoto")} ${msg.price}
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="overflow-hidden rounded-xl">
+        <video
+          src={msg.videoUrl}
+          controls
+          playsInline
+          preload="metadata"
+          className="h-72 w-64 rounded-xl bg-black object-contain"
+        />
+      </div>
     );
   }
 
@@ -328,6 +446,47 @@ export function ChatInterface({
                 )}
               </div>
             </div>
+            <div className="relative" ref={modelSelectorRef}>
+              <Button
+                variant="outline"
+                size="sm"
+                className="shrink-0 gap-1.5 text-xs"
+                onClick={() => setShowModelSelector(!showModelSelector)}
+              >
+                <Bot className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline max-w-[100px] truncate">
+                  {chatModels.find((m) => m.id === selectedModel)?.name || "Modelo"}
+                </span>
+                <ChevronDown className="h-3 w-3" />
+              </Button>
+              {showModelSelector && chatModels.length > 0 && (
+                <div className="absolute right-0 top-full mt-1 z-50 w-72 rounded-lg border border-border bg-popover p-1 shadow-lg">
+                  {chatModels.map((m) => (
+                    <button
+                      key={m.id}
+                      onClick={() => {
+                        setSelectedModel(m.id);
+                        setShowModelSelector(false);
+                      }}
+                      className={`w-full text-left rounded-md px-3 py-2 text-sm hover:bg-accent transition-colors ${
+                        selectedModel === m.id ? "bg-accent" : ""
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium">{m.name}</span>
+                        {selectedModel === m.id && (
+                          <span className="text-pink-500 text-xs font-medium">Activo</span>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">{m.description}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        In: {m.inputPrice}/M &middot; Out: {m.outputPrice}/M
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <Button
               variant="outline"
               size="sm"
@@ -366,10 +525,11 @@ export function ChatInterface({
           <div className="mx-auto max-w-3xl space-y-4">
             {messages.map((msg) => {
               const hasImage = !!msg.imageUrl;
+              const hasVideo = !!msg.videoUrl;
               const hasAudio = !!msg.audioUrl;
               const hasText = !!msg.content && !hasAudio;
-              const isPhotoOnly = hasImage && !hasText && !hasAudio;
-              const isAudioOnly = hasAudio && !hasImage;
+              const isMediaOnly = (hasImage || hasVideo) && !hasText && !hasAudio;
+              const isAudioOnly = hasAudio && !hasImage && !hasVideo;
 
               return (
                 <div
@@ -393,8 +553,10 @@ export function ChatInterface({
                       </div>
                     )}
 
-                    {isPhotoOnly ? (
-                      <div>{renderImage(msg)}</div>
+                    {isMediaOnly ? (
+                      <div>
+                        {hasVideo ? renderVideo(msg) : renderImage(msg)}
+                      </div>
                     ) : isAudioOnly ? (
                       <div className="rounded-2xl bg-muted px-3 py-2">
                         <AudioPlayer src={msg.audioUrl!} />
@@ -407,7 +569,8 @@ export function ChatInterface({
                             : "bg-muted"
                         }`}
                       >
-                        {hasImage && <div className="mb-2">{renderImage(msg)}</div>}
+                        {hasVideo && <div className="mb-2">{renderVideo(msg)}</div>}
+                        {hasImage && !hasVideo && <div className="mb-2">{renderImage(msg)}</div>}
                         {hasAudio && (
                           <div className="mb-2">
                             <AudioPlayer src={msg.audioUrl!} />
@@ -476,20 +639,15 @@ export function ChatInterface({
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder={t("placeholder")}
-              disabled={sending}
               className="h-10 flex-1 rounded-full px-4"
             />
             <Button
               type="submit"
-              disabled={sending || !input.trim()}
+              disabled={!input.trim()}
               size="icon"
               className="h-10 w-10 shrink-0 rounded-full bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 border-0 text-white"
             >
-              {sending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="h-4 w-4" />
-              )}
+              <Send className="h-4 w-4" />
             </Button>
           </form>
         </div>

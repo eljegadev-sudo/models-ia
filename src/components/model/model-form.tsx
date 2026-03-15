@@ -34,7 +34,9 @@ interface ModelFormProps {
     ethnicity?: string;
     height?: number;
     subscriptionPrice: number;
+    exclusivityPrice?: number | null;
     chatPersonality?: string;
+    backstory?: string;
     chatAutomatic: boolean;
     referenceImages?: { id: string; imageUrl: string }[];
   };
@@ -69,7 +71,9 @@ export function ModelForm({ initialData }: ModelFormProps) {
     ethnicity: initialData?.ethnicity || "",
     height: initialData?.height || 170,
     subscriptionPrice: initialData?.subscriptionPrice || 9.99,
+    exclusivityPrice: initialData?.exclusivityPrice ?? 0,
     chatPersonality: initialData?.chatPersonality || "",
+    backstory: initialData?.backstory || "",
     chatAutomatic: initialData?.chatAutomatic ?? true,
   });
 
@@ -172,12 +176,18 @@ export function ModelForm({ initialData }: ModelFormProps) {
         body: JSON.stringify(form),
       });
 
-      if (!res.ok) throw new Error();
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        const msg = err?.details
+          ? err.details.map((d: { message: string }) => d.message).join(", ")
+          : err?.error || "Error saving model";
+        throw new Error(msg);
+      }
       const model = await res.json();
 
       if (!isEditing && referenceImages.length > 0) {
         for (let i = 0; i < referenceImages.length; i++) {
-          await fetch(`/api/models/${model.id}/references`, {
+          const refRes = await fetch(`/api/models/${model.id}/references`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -185,14 +195,15 @@ export function ModelForm({ initialData }: ModelFormProps) {
               orderIndex: i,
             }),
           });
+          if (!refRes.ok) console.error("Failed to save reference image", i);
         }
       }
 
       toast.success(isEditing ? t("success") : t("success"));
       router.push("/dashboard");
       router.refresh();
-    } catch {
-      toast.error("Failed to save model");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save model");
     } finally {
       setLoading(false);
     }
@@ -350,6 +361,25 @@ export function ModelForm({ initialData }: ModelFormProps) {
                   }
                 />
               </div>
+              <div className="space-y-2">
+                <Label>Precio exclusividad (opcional)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  placeholder="0 = no disponible"
+                  value={form.exclusivityPrice === 0 || form.exclusivityPrice === undefined ? "" : form.exclusivityPrice}
+                  onChange={(e) =>
+                    updateField(
+                      "exclusivityPrice",
+                      e.target.value === "" ? 0 : parseFloat(e.target.value)
+                    )
+                  }
+                />
+                <p className="text-xs text-muted-foreground">
+                  Si pones un precio, los usuarios podran &quot;hacerla suya&quot; y solo ellos la veran.
+                </p>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -381,6 +411,18 @@ export function ModelForm({ initialData }: ModelFormProps) {
                 placeholder={t("chatPersonalityPlaceholder")}
                 rows={3}
               />
+            </div>
+            <div className="space-y-2">
+              <Label>Historia de vida (backstory)</Label>
+              <Textarea
+                value={form.backstory}
+                onChange={(e) => updateField("backstory", e.target.value)}
+                placeholder="Cuenta la historia de vida de esta modelo: infancia, familia, como crecio, que estudia o trabaja, hobbies, gustos, cosas que no le gustan, su personalidad real. Mientras mas detallada, mas humana sera la conversacion. Ej: 'Crecio en un pueblo pequeno con su mama y hermana. Sus papas se separaron cuando tenia 12. Nunca le gustaron los videojuegos pero le encanta bailar y cocinar. Trabaja como bartender los fines de semana...'"
+                rows={6}
+              />
+              <p className="text-xs text-muted-foreground">
+                Esta historia influye en como habla, que sabe, que no sabe, y como reacciona en el chat.
+              </p>
             </div>
           </CardContent>
         </Card>

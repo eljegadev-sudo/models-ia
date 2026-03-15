@@ -19,11 +19,18 @@ export default async function DashboardPage() {
     include: {
       subscriptions: {
         where: { status: "ACTIVE" },
-        include: { modelProfile: true },
+        include: {
+          modelProfile: {
+            include: {
+              referenceImages: { take: 1, orderBy: { orderIndex: "asc" } },
+            },
+          },
+        },
       },
       modelProfiles: {
         include: {
           subscriptions: { where: { status: "ACTIVE" } },
+          referenceImages: { take: 1, orderBy: { orderIndex: "asc" } },
           _count: { select: { contentPosts: true } },
         },
       },
@@ -51,6 +58,7 @@ export default async function DashboardPage() {
       modelProfile: {
         ...s.modelProfile,
         subscriptionPrice: Number(s.modelProfile.subscriptionPrice),
+        imageUrl: s.modelProfile.referenceImages?.[0]?.imageUrl ?? null,
       },
     })),
     modelProfiles: user.modelProfiles.map((mp) => ({
@@ -58,6 +66,7 @@ export default async function DashboardPage() {
       subscriptionPrice: Number(mp.subscriptionPrice),
       subscriberCount: mp.subscriptions.length,
       contentCount: mp._count.contentPosts,
+      imageUrl: mp.referenceImages[0]?.imageUrl ?? null,
     })),
     sentTransactions: user.sentTransactions.map((t) => ({
       ...t,

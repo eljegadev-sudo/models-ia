@@ -44,3 +44,18 @@ export async function saveImageFromUrl(
 
   return `/uploads/${subfolder}/${filename}`;
 }
+
+export async function saveImageFromBase64(
+  base64Data: string,
+  subfolder: string = "generated"
+): Promise<string> {
+  const dir = path.join(UPLOAD_DIR, subfolder);
+  await ensureDir(dir);
+
+  const buffer = Buffer.from(base64Data, "base64");
+  const filename = `${uuidv4()}.png`;
+  const filepath = path.join(dir, filename);
+  await writeFile(filepath, buffer);
+
+  return `/uploads/${subfolder}/${filename}`;
+}

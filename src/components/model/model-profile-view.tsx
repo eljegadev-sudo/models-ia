@@ -5,13 +5,11 @@ import { useTranslations } from "next-intl";
 import { useRouter, Link } from "@/i18n/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Heart,
   MessageCircle,
   Lock,
-  DollarSign,
   MapPin,
   Ruler,
   Users,
@@ -20,13 +18,21 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import Image from "next/image";
+import { StoryCircles } from "@/components/stories/story-viewer";
+import { PostGallery } from "@/components/content/post-gallery";
 
 interface ContentPost {
   id: string;
-  imageUrl: string;
+  imageUrl: string | null;
+  videoUrl?: string | null;
+  contentType?: string;
   caption: string | null;
   isPrivate: boolean;
   price: number;
+  likesCount: number;
+  commentsCount: number;
+  isLiked: boolean;
+  isSaved: boolean;
 }
 
 interface ModelProfileViewProps {
@@ -46,6 +52,10 @@ interface ModelProfileViewProps {
     subscriberCount: number;
     referenceImages: { id: string; imageUrl: string }[];
     contentPosts: ContentPost[];
+    stories?: { id: string; imageUrl: string; caption: string | null; createdAt: string }[];
+    exclusivityPrice?: number | null;
+    isExclusiveOwner?: boolean;
+    exclusiveOwnerId?: string | null;
   };
   isSubscribed: boolean;
   isLoggedIn: boolean;
@@ -61,8 +71,16 @@ export function ModelProfileView({
   const t = useTranslations("models.profile");
   const router = useRouter();
   const [subscribing, setSubscribing] = useState(false);
+  const [acquiringExclusivity, setAcquiringExclusivity] = useState(false);
   const [isFavorited, setIsFavorited] = useState(initialFavorited);
   const [togglingFav, setTogglingFav] = useState(false);
+
+  const canAcquireExclusivity =
+    isLoggedIn &&
+    !model.exclusiveOwnerId &&
+    (model.exclusivityPrice ?? 0) > 0 &&
+    !model.isExclusiveOwner;
+  const isExclusiveOwner = model.isExclusiveOwner ?? false;
 
   const publicPosts = model.contentPosts.filter((p) => !p.isPrivate);
   const privatePosts = model.contentPosts.filter((p) => p.isPrivate);
@@ -117,8 +135,39 @@ export function ModelProfileView({
     }
   }
 
+  async function handleAcquireExclusivity() {
+    if (!isLoggedIn || !canAcquireExclusivity) return;
+    setAcquiringExclusivity(true);
+    try {
+      const res = await fetch(`/api/models/${model.id}/acquire-exclusivity`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "Error al adquirir exclusividad");
+        return;
+      }
+      toast.success("¡Ahora es tu modelo exclusiva!");
+      router.refresh();
+    } catch {
+      toast.error("Error al adquirir exclusividad");
+    } finally {
+      setAcquiringExclusivity(false);
+    }
+  }
+
   return (
     <div className="container mx-auto max-w-5xl px-4 py-8">
+      {model.stories && model.stories.length > 0 && (
+        <div className="mb-6 flex justify-center">
+          <StoryCircles
+            stories={model.stories}
+            modelName={model.name}
+            modelAvatar={model.referenceImages[0]?.imageUrl}
+          />
+        </div>
+      )}
+
       <div className="mb-8 flex flex-col gap-6 md:flex-row">
         <div className="relative aspect-[3/4] w-full overflow-hidden rounded-2xl bg-muted md:w-72">
           {coverImage ? (
@@ -132,8 +181,13 @@ export function ModelProfileView({
 
         <div className="flex-1 space-y-4">
           <div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <h1 className="text-3xl font-bold">{model.name}</h1>
+              {isExclusiveOwner && (
+                <Badge className="bg-amber-500/90 text-white px-3 py-1">
+                  Tu modelo exclusiva
+                </Badge>
+              )}
               <Button
                 variant="ghost"
                 size="icon"
@@ -177,10 +231,27 @@ export function ModelProfileView({
             {model.ethnicity && <Badge variant="secondary">{model.ethnicity}</Badge>}
           </div>
 
-          <div className="pt-2">
-            {isSubscribed ? (
+          <div className="pt-2 space-y-3">
+            {canAcquireExclusivity && (
+              <Button
+                variant="outline"
+                className="gap-2 border-amber-500/50 text-amber-600 hover:bg-amber-500/10"
+                onClick={handleAcquireExclusivity}
+                disabled={acquiringExclusivity}
+              >
+                {acquiringExclusivity ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Sparkles className="h-4 w-4" />
+                )}
+                Hacerla tuya - ${model.exclusivityPrice?.toFixed(2)}
+              </Button>
+            )}
+            {(isSubscribed || isExclusiveOwner) ? (
               <div className="flex items-center gap-3">
-                <Badge className="bg-pink-500 px-4 py-1.5 text-sm">{t("subscribed")}</Badge>
+                {isSubscribed && (
+                  <Badge className="bg-pink-500 px-4 py-1.5 text-sm">{t("subscribed")}</Badge>
+                )}
                 <Button className="gap-2 bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 border-0 text-white" asChild>
                   <Link href={`/model/${model.slug}/chat`}>
                     <MessageCircle className="h-4 w-4" />
@@ -215,10 +286,10 @@ export function ModelProfileView({
         </div>
       </div>
 
-      <Tabs defaultValue="public" className="space-y-6">
+      <Tabs defaultValue="all" className="space-y-6">
         <TabsList>
-          <TabsTrigger value="public">
-            {t("publicContent")} ({publicPosts.length})
+          <TabsTrigger value="all">
+            {t("publicContent")} ({model.contentPosts.length})
           </TabsTrigger>
           <TabsTrigger value="private">
             <Lock className="mr-1.5 h-3.5 w-3.5" />
@@ -226,31 +297,17 @@ export function ModelProfileView({
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="public">
-          {publicPosts.length === 0 ? (
+        <TabsContent value="all">
+          {model.contentPosts.length === 0 ? (
             <p className="py-12 text-center text-muted-foreground">
               {t("noPublicContent")}
             </p>
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
-              {publicPosts.map((post) => (
-                <Card key={post.id} className="overflow-hidden">
-                  <div className="relative aspect-square">
-                    <Image
-                      src={post.imageUrl}
-                      alt={post.caption || ""}
-                      fill
-                      className="object-cover"
-                    />
-                  </div>
-                  {post.caption && (
-                    <CardContent className="p-3">
-                      <p className="text-sm">{post.caption}</p>
-                    </CardContent>
-                  )}
-                </Card>
-              ))}
-            </div>
+            <PostGallery
+              posts={model.contentPosts}
+              isSubscribed={isSubscribed}
+              isLoggedIn={isLoggedIn}
+            />
           )}
         </TabsContent>
 
@@ -274,11 +331,11 @@ export function ModelProfileView({
               No private content yet
             </p>
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
-              {privatePosts.map((post) => (
-                <ContentCard key={post.id} post={post} />
-              ))}
-            </div>
+            <PostGallery
+              posts={privatePosts}
+              isSubscribed={isSubscribed}
+              isLoggedIn={isLoggedIn}
+            />
           )}
         </TabsContent>
       </Tabs>
@@ -286,53 +343,3 @@ export function ModelProfileView({
   );
 }
 
-function ContentCard({ post }: { post: ContentPost }) {
-  const [unlocked, setUnlocked] = useState(post.price === 0);
-  const t = useTranslations("models.profile");
-
-  async function handleUnlock() {
-    try {
-      const res = await fetch("/api/content/unlock", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contentId: post.id }),
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        toast.error(data.error || "Failed to unlock");
-        return;
-      }
-      setUnlocked(true);
-      toast.success("Content unlocked!");
-    } catch {
-      toast.error("Failed to unlock");
-    }
-  }
-
-  return (
-    <Card className="overflow-hidden">
-      <div className="relative aspect-square">
-        <Image
-          src={post.imageUrl}
-          alt={post.caption || ""}
-          fill
-          className={`object-cover ${!unlocked ? "blur-xl" : ""}`}
-        />
-        {!unlocked && post.price > 0 && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/30">
-            <Lock className="mb-2 h-8 w-8 text-white" />
-            <Button size="sm" onClick={handleUnlock} className="gap-1.5">
-              <DollarSign className="h-3.5 w-3.5" />
-              {t("unlockContent")} ${post.price}
-            </Button>
-          </div>
-        )}
-      </div>
-      {post.caption && unlocked && (
-        <CardContent className="p-3">
-          <p className="text-sm">{post.caption}</p>
-        </CardContent>
-      )}
-    </Card>
-  );
-}

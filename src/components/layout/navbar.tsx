@@ -20,14 +20,35 @@ import {
   LayoutDashboard,
   Compass,
   LogOut,
+  Bell,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { NotificationPanel } from "@/components/notifications/notification-panel";
 
 export function Navbar() {
   const t = useTranslations("nav");
   const { data: session } = useSession();
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const fetchUnread = useCallback(async () => {
+    if (!session?.user) return;
+    try {
+      const res = await fetch("/api/notifications");
+      if (res.ok) {
+        const data = await res.json();
+        setUnreadCount(data.unreadCount || 0);
+      }
+    } catch { /* silent */ }
+  }, [session?.user]);
+
+  useEffect(() => {
+    fetchUnread();
+    const interval = setInterval(fetchUnread, 30000);
+    return () => clearInterval(interval);
+  }, [fetchUnread]);
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-xl">
@@ -64,6 +85,28 @@ export function Navbar() {
 
         <div className="flex items-center gap-2">
           <LanguageSwitcher />
+
+          {session && (
+            <div className="relative">
+              <button
+                onClick={() => { setNotifOpen(!notifOpen); if (!notifOpen) fetchUnread(); }}
+                className="relative inline-flex items-center justify-center rounded-lg p-2 hover:bg-muted transition-colors"
+              >
+                <Bell className="h-5 w-5" />
+                {unreadCount > 0 && (
+                  <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-pink-500 px-1 text-[10px] font-bold text-white">
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </span>
+                )}
+              </button>
+              {notifOpen && (
+                <NotificationPanel
+                  onClose={() => setNotifOpen(false)}
+                  onRead={() => setUnreadCount(0)}
+                />
+              )}
+            </div>
+          )}
 
           {session ? (
             <DropdownMenu>

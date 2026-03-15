@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateImageFromImage } from "@/lib/replicate";
 import { saveImageFromUrl } from "@/lib/upload";
-import { generateStoryCaption } from "@/lib/openai";
+import { generateStoryCaption } from "@/lib/ai";
 import { readFile } from "fs/promises";
 import path from "path";
 

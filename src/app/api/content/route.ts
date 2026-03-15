@@ -10,7 +10,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { modelProfileId, imageUrl, caption, isPrivate, price, promptUsed } = body;
+    const { modelProfileId, imageUrl, videoUrl, contentType, caption, isPrivate, price, promptUsed } = body;
 
     const model = await prisma.modelProfile.findUnique({
       where: { id: modelProfileId },
@@ -21,10 +21,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
+    const isReel = contentType === "REEL";
+    if (isReel && !videoUrl) {
+      return NextResponse.json({ error: "videoUrl required for REEL" }, { status: 400 });
+    }
+    if (!isReel && !imageUrl) {
+      return NextResponse.json({ error: "imageUrl required for IMAGE" }, { status: 400 });
+    }
+
     const post = await prisma.contentPost.create({
       data: {
         modelProfileId,
-        imageUrl,
+        imageUrl: isReel ? null : imageUrl,
+        videoUrl: isReel ? videoUrl : null,
+        contentType: isReel ? "REEL" : "IMAGE",
         caption,
         isPrivate: isPrivate || false,
         price: price || 0,

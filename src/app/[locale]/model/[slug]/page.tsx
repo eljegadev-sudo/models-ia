@@ -20,6 +20,13 @@ export default async function ModelProfilePage({
       contentPosts: {
         where: { status: "APPROVED" },
         orderBy: { createdAt: "desc" },
+        include: {
+          _count: { select: { likes: true, comments: true } },
+        },
+      },
+      stories: {
+        where: { status: "APPROVED", expiresAt: { gt: new Date() } },
+        orderBy: { createdAt: "desc" },
       },
       _count: { select: { subscriptions: true } },
     },
@@ -27,11 +34,18 @@ export default async function ModelProfilePage({
 
   if (!model || !model.isActive) notFound();
 
+  if (model.exclusiveOwnerId && model.exclusiveOwnerId !== session?.user?.id) {
+    notFound();
+  }
+
   let isSubscribed = false;
   let isFavorited = false;
+  let userLikedPostIds = new Set<string>();
+  let userSavedPostIds = new Set<string>();
 
   if (session?.user) {
-    const [sub, fav] = await Promise.all([
+    const postIds = model.contentPosts.map((p) => p.id);
+    const [sub, fav, likes, saves] = await Promise.all([
       prisma.subscription.findUnique({
         where: {
           clientId_modelProfileId: {
@@ -48,18 +62,40 @@ export default async function ModelProfilePage({
           },
         },
       }),
+      prisma.postLike.findMany({
+        where: { userId: session.user.id, postId: { in: postIds } },
+        select: { postId: true },
+      }),
+      prisma.savedPost.findMany({
+        where: { userId: session.user.id, postId: { in: postIds } },
+        select: { postId: true },
+      }),
     ]);
     isSubscribed = sub?.status === "ACTIVE";
     isFavorited = !!fav;
+    userLikedPostIds = new Set(likes.map((l) => l.postId));
+    userSavedPostIds = new Set(saves.map((s) => s.postId));
   }
 
   const serialized = {
     ...model,
     subscriptionPrice: Number(model.subscriptionPrice),
+    exclusivityPrice: model.exclusivityPrice ? Number(model.exclusivityPrice) : null,
+    isExclusiveOwner: !!session?.user && model.exclusiveOwnerId === session.user.id,
     subscriberCount: model._count.subscriptions,
     contentPosts: model.contentPosts.map((p) => ({
       ...p,
       price: Number(p.price),
+      likesCount: p._count.likes,
+      commentsCount: p._count.comments,
+      isLiked: userLikedPostIds.has(p.id),
+      isSaved: userSavedPostIds.has(p.id),
+    })),
+    stories: model.stories.map((s) => ({
+      id: s.id,
+      imageUrl: s.imageUrl,
+      caption: s.caption,
+      createdAt: s.createdAt.toISOString(),
     })),
   };
 

@@ -15,6 +15,7 @@ const createModelSchema = z.object({
   height: z.number().optional(),
   subscriptionPrice: z.number().min(0),
   chatPersonality: z.string().optional(),
+  backstory: z.string().optional(),
   chatAutomatic: z.boolean().optional(),
 });
 
@@ -58,6 +59,7 @@ export async function POST(request: Request) {
         height: data.height,
         subscriptionPrice: data.subscriptionPrice,
         chatPersonality: data.chatPersonality,
+        backstory: data.backstory,
         chatAutomatic: data.chatAutomatic ?? true,
       },
     });
@@ -74,6 +76,7 @@ export async function POST(request: Request) {
 
 export async function GET(request: Request) {
   try {
+    const session = await auth();
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get("userId");
     const page = parseInt(searchParams.get("page") || "1");
@@ -81,16 +84,25 @@ export async function GET(request: Request) {
     const search = searchParams.get("search") || "";
     const sort = searchParams.get("sort") || "newest";
 
-    const where = {
-      isActive: true,
-      ...(userId && { userId }),
-      ...(search && {
+    // Filtro exclusividad: requiere npx prisma generate (detener servidor antes).
+    // Cuando el cliente tenga exclusiveOwnerId, añadir: andConditions.unshift(
+    //   session?.user ? { OR: [{ exclusiveOwnerId: null }, { exclusiveOwnerId: session.user.id }] } : { exclusiveOwnerId: null }
+    // );
+    const andConditions: object[] = [];
+    if (userId) andConditions.push({ userId });
+    if (search) {
+      andConditions.push({
         OR: [
           { name: { contains: search, mode: "insensitive" as const } },
           { bio: { contains: search, mode: "insensitive" as const } },
           { nationality: { contains: search, mode: "insensitive" as const } },
         ],
-      }),
+      });
+    }
+
+    const where = {
+      isActive: true,
+      ...(andConditions.length > 0 && { AND: andConditions }),
     };
 
     const orderBy = sort === "popular"

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { notifySubscribers } from "@/lib/notifications";
 
 export async function PATCH(
   request: Request,
@@ -24,15 +25,36 @@ export async function PATCH(
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
+    const wasNotApproved = post.status !== "APPROVED";
+
+    const updateData: Record<string, unknown> = {
+      status: body.status,
+      isPrivate: body.isPrivate,
+      price: body.price,
+      caption: body.caption,
+    };
+    if (body.videoUrl !== undefined) updateData.videoUrl = body.videoUrl;
+
     const updated = await prisma.contentPost.update({
       where: { id },
-      data: {
-        status: body.status,
-        isPrivate: body.isPrivate,
-        price: body.price,
-        caption: body.caption,
-      },
+      data: updateData,
     });
+
+    if (wasNotApproved && body.status === "APPROVED") {
+      const modelName = await prisma.modelProfile.findUnique({
+        where: { id: post.modelProfileId },
+        select: { name: true, slug: true },
+      });
+      const isReel = post.contentType === "REEL";
+      notifySubscribers(
+        post.modelProfileId,
+        "new_post",
+        `${modelName?.name || "Modelo"} subio ${isReel ? "nuevo reel" : "nueva foto"}`,
+        body.caption || "Nuevo contenido disponible",
+        post.imageUrl ?? post.videoUrl ?? undefined,
+        modelName?.slug ? `/model/${modelName.slug}` : undefined
+      ).catch(console.error);
+    }
 
     return NextResponse.json(updated);
   } catch (error) {

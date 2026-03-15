@@ -12,9 +12,16 @@ import {
   X,
   Clock,
   ArrowLeft,
+  Eye,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "@/i18n/navigation";
+
+interface StoryViewer {
+  id: string;
+  username: string;
+  avatar: string | null;
+}
 
 interface Story {
   id: string;
@@ -23,6 +30,8 @@ interface Story {
   status: "PENDING" | "APPROVED" | "REJECTED";
   expiresAt: string;
   createdAt: string;
+  viewCount?: number;
+  viewers?: StoryViewer[];
 }
 
 export default function StoriesPage({
@@ -200,6 +209,8 @@ function StoryCard({
   onApprove?: () => void;
   onReject?: () => void;
 }) {
+  const [showViewers, setShowViewers] = useState(false);
+
   const statusColors = {
     PENDING: "bg-yellow-500/10 text-yellow-500",
     APPROVED: "bg-green-500/10 text-green-500",
@@ -227,12 +238,43 @@ function StoryCard({
             <Badge variant="secondary">Expirada</Badge>
           </div>
         )}
-        {story.caption && (
-          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-3">
-            <p className="text-white text-xs line-clamp-2">{story.caption}</p>
-          </div>
-        )}
+        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-3">
+          {story.caption && (
+            <p className="text-white text-xs line-clamp-2 mb-1">{story.caption}</p>
+          )}
+          {story.viewCount !== undefined && (
+            <button
+              onClick={() => setShowViewers(!showViewers)}
+              className="flex items-center gap-1 text-white/80 text-xs hover:text-white transition-colors"
+            >
+              <Eye className="h-3 w-3" />
+              {story.viewCount} vista{story.viewCount !== 1 ? "s" : ""}
+            </button>
+          )}
+        </div>
       </div>
+
+      {showViewers && story.viewers && story.viewers.length > 0 && (
+        <CardContent className="p-2 border-b">
+          <p className="text-[11px] font-medium text-muted-foreground mb-1">Visto por:</p>
+          <div className="space-y-1 max-h-24 overflow-y-auto">
+            {story.viewers.map((v) => (
+              <div key={v.id} className="flex items-center gap-2 text-xs">
+                <div className="h-5 w-5 rounded-full bg-muted flex items-center justify-center overflow-hidden">
+                  {v.avatar ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={v.avatar} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <span className="text-[9px] font-bold">{v.username[0]?.toUpperCase()}</span>
+                  )}
+                </div>
+                <span>@{v.username}</span>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      )}
+
       {onApprove && onReject && (
         <CardContent className="p-2 flex gap-2">
           <Button
