@@ -31,12 +31,8 @@ RUN npx prisma generate
 RUN npm run build
 
 # ---- Final production stage ----
-FROM base
-
-# Install OpenSSL (required by Prisma at runtime in slim images)
-RUN apt-get update -qq && \
-    apt-get install --no-install-recommends -y openssl && \
-    rm -rf /var/lib/apt/lists/*
+# Use full bookworm (not slim) to ensure all native libs (OpenSSL, glibc, etc.) are present
+FROM node:${NODE_VERSION}-bookworm
 
 # Copy standalone output (Next.js + minimal traced node_modules)
 COPY --from=build /app/.next/standalone /app
@@ -50,8 +46,14 @@ COPY --from=build /app/prisma /app/prisma
 COPY --from=build /app/node_modules/.prisma /app/node_modules/.prisma
 COPY --from=build /app/node_modules/@prisma/client /app/node_modules/@prisma/client
 
+WORKDIR /app
+
 EXPOSE 3000
 ENV HOSTNAME="0.0.0.0"
 ENV PORT=3000
+ENV NODE_ENV="production"
+ENV NEXT_TELEMETRY_DISABLED=1
+# Prevent unhandled rejections from crashing the process silently
+ENV NODE_OPTIONS="--unhandled-rejections=warn"
 
 CMD [ "node", "server.js" ]
