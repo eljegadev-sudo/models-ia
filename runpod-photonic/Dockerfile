@@ -1,8 +1,9 @@
 # syntax=docker/dockerfile:1
 # RunPod Serverless Worker - Photonic Fusion SDXL NSFW Generator
-# Base: RunPod PyTorch image with CUDA 12.1 + Python 3.10
+# Base: RunPod PyTorch 2.4 + CUDA 12.4 + Python 3.11
+# PyTorch 2.4 required by diffusers>=0.30 (torch.distributed.device_mesh)
 
-FROM runpod/pytorch:2.2.1-py3.10-cuda12.1.1-devel-ubuntu22.04
+FROM runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04
 
 WORKDIR /app
 

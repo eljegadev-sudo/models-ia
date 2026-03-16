@@ -1,8 +1,8 @@
 runpod>=1.7.9
 
 # ---- Core numeric / ML stack ----
-# Explicit pin to prevent any package from upgrading to numpy 2.x
-# (torch 2.2.1 was compiled with numpy 1.x C API)
+# Pin numpy 1.x — torch 2.4 supports both 1.x and 2.x but some C-extensions
+# (insightface, basicsr) still require numpy 1.x ABI
 numpy==1.26.4
 scipy==1.13.1
 scikit-image==0.22.0
@@ -27,7 +27,7 @@ accelerate>=0.30.0
 # ---- Vision / Face ----
 opencv-python-headless>=4.9.0.80
 insightface==0.7.3
-onnxruntime-gpu==1.17.1
+onnxruntime-gpu>=1.18.0
 
 # ---- GFPGAN + deps (use git for cached_download compat) ----
 basicsr>=1.4.2
