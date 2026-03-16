@@ -19,6 +19,9 @@ RUN apt-get update -qq && \
         wget \
     && rm -rf /var/lib/apt/lists/*
 
+# Remove pre-installed xformers from base image (incompatible version with our deps)
+RUN pip uninstall -y xformers || true
+
 # Install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt && \

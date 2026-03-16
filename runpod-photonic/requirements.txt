@@ -35,5 +35,8 @@ facexlib>=0.3.0
 realesrgan>=0.3.0
 git+https://github.com/TencentARC/GFPGAN.git
 
+# ---- xformers (must match PyTorch 2.4.0 + CUDA 12.4) ----
+xformers==0.0.27.post2
+
 # ---- IP-Adapter FaceID ----
 git+https://github.com/tencent-ailab/IP-Adapter.git
