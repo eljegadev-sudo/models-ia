@@ -14,6 +14,21 @@ import time
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
+# Compatibility patch: torch.xpu missing in some PyTorch builds (< 2.3).
+# accelerate/diffusers may call torch.xpu.is_available() unconditionally.
+# ---------------------------------------------------------------------------
+import torch as _torch
+if not hasattr(_torch, "xpu"):
+    class _FakeXPU:
+        @staticmethod
+        def is_available() -> bool:
+            return False
+        @staticmethod
+        def device_count() -> int:
+            return 0
+    _torch.xpu = _FakeXPU()  # type: ignore[attr-defined]
+
+# ---------------------------------------------------------------------------
 # Compatibility patch: gfpgan uses cached_download which was removed in
 # huggingface_hub >= 0.17.0. Patch it before any gfpgan import.
 # ---------------------------------------------------------------------------

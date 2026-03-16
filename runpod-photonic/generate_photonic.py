@@ -16,6 +16,18 @@ HF_HOME_DEFAULT = os.environ.get("HF_HOME", "/runpod-volume/hf_cache")
 os.environ.setdefault("HF_HOME", HF_HOME_DEFAULT)
 
 import torch
+
+# Patch: torch.xpu missing in some PyTorch builds (< 2.3)
+if not hasattr(torch, "xpu"):
+    class _FakeXPU:
+        @staticmethod
+        def is_available() -> bool:
+            return False
+        @staticmethod
+        def device_count() -> int:
+            return 0
+    torch.xpu = _FakeXPU()  # type: ignore[attr-defined]
+
 from PIL import Image
 
 
