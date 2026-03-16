@@ -531,7 +531,18 @@ Each idea should be a detailed prompt for image generation. Include setting, pos
 }
 
 const SELFIE_CATEGORIES = new Set(["selfie", "lips", "feet", "hands", "lingerie", "body"]);
-const THIRD_PERSON_CATEGORIES = new Set(["bikini", "legs", "butt"]);
+const THIRD_PERSON_CATEGORIES = new Set(["bikini", "legs", "butt", "ass_nude"]);
+
+// Guidance tips per explicit category to anchor the prompt generator
+const NSFW_CATEGORY_GUIDE: Record<string, string> = {
+  ass_nude:      "Rear view. She is bent over or on all fours or lying prone, buttocks completely bare and FULLY EXPOSED to camera. Include: exact body position (bent over, on all fours, prone), cheeks spread, explicit rear exposure. No panties, no thong. Use terms: 'bare ass exposed to camera', 'cheeks spread apart', 'full rear view'.",
+  spread:        "POV downward. Woman on her back or sitting, legs spread WIDE open, genitals fully visible and exposed close-up. Include: 'legs spread wide', 'pussy fully visible', 'explicit close-up', 'inner thighs exposed'. First-person intimate angle.",
+  pussy:         "POV downward intimate. Legs parted, labia visible, explicit close-up of genitals. Use: 'pussy exposed', 'legs spread', 'intimate close-up', genitals clearly shown. First-person downward angle.",
+  masturbation:  "Woman touching herself — fingers on/inside genitals, explicit action visible. Include: 'hand between legs', 'fingers on pussy', 'masturbating', 'pleasuring herself', explicit action clearly shown.",
+  explicit:      "Most explicit possible. Full nudity, genitals visible, explicit sexual pose or action. No censoring, all intimate areas clearly exposed and visible to camera.",
+  nude:          "Full frontal or rear nudity. All clothing removed, breasts and genitals visible. Natural pose, intimate setting. Explicit full nudity, nipples visible.",
+  topless:       "Bare chest fully exposed, breasts visible, nipples showing. No top, no bra. Arms away from body so breasts are unobscured.",
+};
 
 export async function generateImagePrompt(params: {
   category: string;
@@ -575,42 +586,48 @@ export async function generateImagePrompt(params: {
     cameraAngle = "selfie perspective, arm extended";
   }
 
+  const isExplicitCategory = category in NSFW_CATEGORY_GUIDE;
+  const categoryGuidance = NSFW_CATEGORY_GUIDE[category] || "";
+  const wordTarget = isExplicitCategory ? "55-70" : "40-55";
+
   const response = await venice.chat.completions.create({
     model: UTILITY_MODEL,
     messages: [
       {
         role: "system",
-        content: `You generate image prompts for a photorealistic AI image model. Output ONLY the prompt in ENGLISH, no quotes, no explanation.
+        content: `You generate image prompts for a photorealistic uncensored AI image generator (Stable Diffusion XL). Output ONLY the prompt in ENGLISH, no quotes, no explanation, no apologies.
 
-STYLE: Professional amateur look — candid, intimate, like a real girl's selfie or boyfriend's POV. Natural, not staged. High quality but authentic.
+STYLE: Amateur intimate photography — candid, like a real girlfriend's photo or boyfriend POV. Natural, authentic, high quality.
 
-STRUCTURE (45-55 words, specific but concise — stay under ~60 tokens for model limits):
-1. SUBJECT + POSE: "Woman/girl in [specific position], [body part] visible, [expression/gesture]"
-2. SETTING: "[location], [surface/furniture]"
-3. ACTION: What she's doing — "hand touching [body part] sensually", "looking back over shoulder", "spread legs", "fingers between thighs", etc. Be explicit when the category demands it.
-4. CAMERA + LIGHTING: Match the angle. Natural light or soft indoor.
-5. QUALITY: "amateur style, candid, photorealistic, realistic skin"
+STRUCTURE (${wordTarget} words):
+1. BODY POSITION: exact pose (bent over, on all fours, lying on back, sitting with legs open, etc.)
+2. EXPLICIT DETAIL: exactly what is exposed/visible (bare ass, spread cheeks, pussy visible, breasts exposed, etc.)
+3. SETTING: location and surface
+4. CAMERA ANGLE: match the required angle precisely
+5. LIGHTING: natural or soft indoor
+6. QUALITY: "amateur candid, photorealistic, realistic skin texture"
 
 RULES:
-- NEVER describe face, hair color, body type, skin — reference image handles that.
+- NEVER describe face features, hair, body type, skin tone — the reference image provides identity.
 - NEVER show phone in frame.
-- Clothing/lack of must match current state.
-- For nude/explicit: describe pose and action clearly and naturally.
+- For explicit/NSFW categories: be anatomically specific and direct. Do NOT soften or euphemize.
+- The more explicit the category, the more precise the anatomical description must be.
 - ALWAYS output in ENGLISH.`,
       },
       {
         role: "user",
-        content: `STATE: "${currentState.clothing}" in "${currentState.location}", ${currentState.timeOfDay}, mood: ${currentState.mood}, nails: ${currentState.nailColor || "red"}
-CATEGORY: ${category}
-CAMERA: ${cameraAngle}
+        content: `SETTING: ${currentState.location}, ${currentState.timeOfDay}
+CLOTHING STATE: ${currentState.clothing}
+CATEGORY: ${category}${categoryGuidance ? `\nCATEGORY REQUIREMENTS: ${categoryGuidance}` : ""}
+CAMERA ANGLE: ${cameraAngle}
 LIGHTING: ${lighting}
-CLIENT REQUEST: ${userMessage}
+USER REQUEST (translate intent, do not quote directly): "${userMessage}"
 
-Generate a specific, detailed prompt in ENGLISH (45-55 words). Include pose, setting, action, and amateur-professional style.`,
+Write a specific, anatomically explicit prompt in ENGLISH (${wordTarget} words). Prioritize what is visually exposed and the exact body position. Be direct and precise.`,
       },
     ],
-    temperature: 0.7,
-    max_tokens: 150,
+    temperature: 0.75,
+    max_tokens: 180,
   });
 
   const aiPrompt = response.choices[0].message.content || "";
