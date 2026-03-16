@@ -248,7 +248,7 @@ VAE_ID = "madebyollin/sdxl-vae-fp16-fix"
 
 FACEID_REPO = "h94/IP-Adapter-FaceID"
 FACEID_BIN = "ip-adapter-faceid-plusv2_sdxl.bin"
-CLIP_ENCODER = "laion/CLIP-ViT-H-14-laion2B-s32K"
+CLIP_ENCODER = "laion/CLIP-ViT-H-14-laion2B-s32K-b32K"
 
 CHECKPOINTS_DIR = Path(os.environ.get("CHECKPOINTS_DIR", "/runpod-volume/checkpoints"))
 INSWAPPER_URL = "https://huggingface.co/thebiglaskowski/inswapper_128.onnx/resolve/main/inswapper_128.onnx"
@@ -361,10 +361,14 @@ def _get_local_snapshot_path(repo_id: str) -> str | None:
 
 def _maybe_merge_unet_shards(snapshot_path: str) -> None:
     """
-    Fusiona los shards del UNet en un solo archivo safetensors operando directamente
-    sobre bytes (sin cargar tensores en memoria). Solo ocurre una vez.
-    diffusers < 0.30 no puede cargar sharded safetensors desde directorios locales.
+    diffusers >= 0.29 maneja sharded safetensors de forma nativa. No es necesario
+    fusionar los shards manualmente. Esta función se mantiene como no-op para
+    compatibilidad con el código que la llama.
     """
+    print(f"[merge] diffusers>=0.29 carga shards nativo, merge omitido: {snapshot_path}")
+    return
+
+    # --- CÓDIGO INACTIVO (se mantiene como referencia para versiones antiguas) ---
     import json
     import struct
     import traceback
