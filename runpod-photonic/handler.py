@@ -225,14 +225,30 @@ def _run_faceid(args: _Args, req: dict, t0: float) -> dict:
     pipe.enable_vae_tiling()
     gp._try_xformers(pipe)
 
-    ip_model = IPAdapterFaceIDPlusXL(pipe, gp.CLIP_ENCODER, ip_ckpt, "cuda")
+    # Intentar FaceID Plus (con CLIP image encoder para mayor fidelidad facial)
+    # Si el CLIP encoder falla, caer a FaceID no-plus (solo embedding facial)
+    _use_plus = True
+    try:
+        print(f"[faceid] Cargando CLIP encoder: {gp.CLIP_ENCODER}")
+        ip_model = IPAdapterFaceIDPlusXL(pipe, gp.CLIP_ENCODER, ip_ckpt, "cuda")
+        print(f"[faceid] CLIP encoder cargado OK")
+    except Exception as _clip_err:
+        print(f"[faceid] CLIP encoder falló ({_clip_err}), usando FaceID no-plus")
+        from ip_adapter.ip_adapter_faceid import IPAdapterFaceIDXL
+        _ip_ckpt_basic = hf_hub_download(repo_id=gp.FACEID_REPO, filename="ip-adapter-faceid_sdxl.bin")
+        ip_model = IPAdapterFaceIDXL(pipe, _ip_ckpt_basic, "cuda")
+        _use_plus = False
+
     ip_model.set_scale(req.get("face_strength", 0.4))
 
-    image_prompt_embeds, uncond_image_prompt_embeds = ip_model.get_image_embeds(
-        faceid_embeds, face_crop, req.get("s_scale", 4.5), shortcut=True,
-    )
+    if _use_plus:
+        image_prompt_embeds, uncond_image_prompt_embeds = ip_model.get_image_embeds(
+            faceid_embeds, face_crop, req.get("s_scale", 4.5), shortcut=True,
+        )
+        ip_model.image_encoder.to("cpu")
+    else:
+        image_prompt_embeds, uncond_image_prompt_embeds = ip_model.get_image_embeds(faceid_embeds)
 
-    ip_model.image_encoder.to("cpu")
     torch.cuda.empty_cache()
 
     with torch.inference_mode():

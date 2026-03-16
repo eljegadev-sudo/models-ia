@@ -248,7 +248,7 @@ VAE_ID = "madebyollin/sdxl-vae-fp16-fix"
 
 FACEID_REPO = "h94/IP-Adapter-FaceID"
 FACEID_BIN = "ip-adapter-faceid-plusv2_sdxl.bin"
-CLIP_ENCODER = "laion/CLIP-ViT-H-14-laion2B-s32K-b32K"
+CLIP_ENCODER = "laion/CLIP-ViT-H-14-laion2B-s32B-b79K"
 
 CHECKPOINTS_DIR = Path(os.environ.get("CHECKPOINTS_DIR", "/runpod-volume/checkpoints"))
 INSWAPPER_URL = "https://huggingface.co/thebiglaskowski/inswapper_128.onnx/resolve/main/inswapper_128.onnx"
