@@ -20,12 +20,18 @@ import torch
 # Patch: torch.xpu missing in some PyTorch builds (< 2.3)
 if not hasattr(torch, "xpu"):
     class _FakeXPU:
-        @staticmethod
-        def is_available() -> bool:
+        def is_available(self) -> bool:
             return False
-        @staticmethod
-        def device_count() -> int:
+        def device_count(self) -> int:
             return 0
+        def empty_cache(self) -> None:
+            pass
+        def synchronize(self, device=None) -> None:
+            pass
+        def __getattr__(self, name):
+            def _noop(*args, **kwargs):
+                return None
+            return _noop
     torch.xpu = _FakeXPU()  # type: ignore[attr-defined]
 
 from PIL import Image

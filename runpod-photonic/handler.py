@@ -15,17 +15,24 @@ from pathlib import Path
 
 # ---------------------------------------------------------------------------
 # Compatibility patch: torch.xpu missing in some PyTorch builds (< 2.3).
-# accelerate/diffusers may call torch.xpu.is_available() unconditionally.
+# accelerate/diffusers/xformers call torch.xpu.* (is_available, empty_cache,
+# synchronize, etc.). Provide a no-op stub for any unknown method.
 # ---------------------------------------------------------------------------
 import torch as _torch
 if not hasattr(_torch, "xpu"):
     class _FakeXPU:
-        @staticmethod
-        def is_available() -> bool:
+        def is_available(self) -> bool:
             return False
-        @staticmethod
-        def device_count() -> int:
+        def device_count(self) -> int:
             return 0
+        def empty_cache(self) -> None:
+            pass
+        def synchronize(self, device=None) -> None:
+            pass
+        def __getattr__(self, name):
+            def _noop(*args, **kwargs):
+                return None
+            return _noop
     _torch.xpu = _FakeXPU()  # type: ignore[attr-defined]
 
 # ---------------------------------------------------------------------------
