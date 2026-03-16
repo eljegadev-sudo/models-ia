@@ -1,8 +1,7 @@
 runpod>=1.7.9
 
 # ---- Core numeric / ML stack ----
-# Pin numpy 1.x — torch 2.4 supports both 1.x and 2.x but some C-extensions
-# (insightface, basicsr) still require numpy 1.x ABI
+# Pin numpy 1.x — required by torch 2.2.1 C API and insightface/basicsr
 numpy==1.26.4
 scipy==1.13.1
 scikit-image==0.22.0
@@ -18,25 +17,22 @@ yapf>=0.32.0
 tqdm>=4.66.0
 requests>=2.31.0
 
-# ---- HuggingFace ----
+# ---- HuggingFace — pinned to versions compatible with PyTorch 2.2.1 ----
 huggingface-hub>=0.21.0
-transformers>=4.40.0
-diffusers>=0.30.0
-accelerate>=0.30.0
+transformers==4.38.2
+diffusers==0.27.2
+accelerate==0.29.3
 
 # ---- Vision / Face ----
 opencv-python-headless>=4.9.0.80
 insightface==0.7.3
-onnxruntime-gpu>=1.18.0
+onnxruntime-gpu==1.17.1
 
 # ---- GFPGAN + deps (use git for cached_download compat) ----
 basicsr>=1.4.2
 facexlib>=0.3.0
 realesrgan>=0.3.0
 git+https://github.com/TencentARC/GFPGAN.git
-
-# ---- xformers (must match PyTorch 2.4.0 + CUDA 12.4) ----
-xformers==0.0.27.post2
 
 # ---- IP-Adapter FaceID ----
 git+https://github.com/tencent-ailab/IP-Adapter.git
