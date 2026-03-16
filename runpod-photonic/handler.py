@@ -116,9 +116,10 @@ def _ensure_pipeline():
         )
 
     gp._apply_scheduler(pipe)
-    pipe.enable_model_cpu_offload()
     pipe.enable_vae_tiling()
     gp._try_xformers(pipe)
+    # No usar enable_model_cpu_offload — IPAdapterFaceIDPlusXL llama pipe.to("cuda")
+    # internamente y eso rompe los hooks de cpu_offload. Con GPU de 32/48 GB no hace falta.
 
     _CACHE["pipeline"] = pipe
     print("[cache] Pipeline SDXL cargado y cacheado OK")
@@ -288,10 +289,6 @@ def _run_faceid(args: _Args, req: dict, t0: float) -> dict:
             [negative_prompt_embeds, uncond_image_prompt_embeds], dim=1,
         )
 
-    ip_model.pipe.text_encoder.to("cpu")
-    ip_model.pipe.text_encoder_2.to("cpu")
-    ip_model.pipe.text_encoder = None
-    ip_model.pipe.text_encoder_2 = None
     torch.cuda.empty_cache()
 
     seed = args.seed if args.seed is not None else 42
@@ -312,7 +309,8 @@ def _run_faceid(args: _Args, req: dict, t0: float) -> dict:
     raw_image = images[0]
     raw_b64 = _image_to_base64(raw_image)
 
-    del ip_model, pipe
+    # Liberar ip_model (CLIP encoder + FaceID projection) pero NO el pipeline cacheado
+    del ip_model
     torch.cuda.empty_cache()
 
     if req.get("faceswap", True):

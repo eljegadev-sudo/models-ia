@@ -107,13 +107,13 @@ export async function POST(request: Request) {
 
       const history = reversedMessages
         .filter((m) => {
-          if (!m.content) return true;
+          if (!m.content) return false; // Excluir mensajes sin texto (fotos/videos/audio)
           if (m.senderType === "MODEL" && isToxicMessage(m.content)) return false;
           return true;
         })
         .map((m) => ({
           role: (m.senderType === "CLIENT" ? "user" : "assistant") as "user" | "assistant",
-          content: m.content || "",
+          content: m.content as string,
         }));
       history.push({ role: "user", content: content || "" });
 
