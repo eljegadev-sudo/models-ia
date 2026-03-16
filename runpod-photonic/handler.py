@@ -36,6 +36,16 @@ if not hasattr(_torch, "xpu"):
     _torch.xpu = _FakeXPU()  # type: ignore[attr-defined]
 
 # ---------------------------------------------------------------------------
+# Compatibility patch: torchvision >= 0.17 removed functional_tensor module.
+# basicsr/gfpgan import from it. Provide a shim before any gfpgan import.
+# ---------------------------------------------------------------------------
+try:
+    import torchvision.transforms.functional_tensor  # noqa: F401
+except ImportError:
+    import torchvision.transforms.functional as _tvtf
+    sys.modules["torchvision.transforms.functional_tensor"] = _tvtf  # type: ignore[assignment]
+
+# ---------------------------------------------------------------------------
 # Compatibility patch: gfpgan uses cached_download which was removed in
 # huggingface_hub >= 0.17.0. Patch it before any gfpgan import.
 # ---------------------------------------------------------------------------

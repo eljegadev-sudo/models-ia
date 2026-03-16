@@ -34,6 +34,14 @@ if not hasattr(torch, "xpu"):
             return _noop
     torch.xpu = _FakeXPU()  # type: ignore[attr-defined]
 
+# Compatibility shim: torchvision >= 0.17 removed functional_tensor module.
+# basicsr/gfpgan import from it — provide shim before any such import.
+try:
+    import torchvision.transforms.functional_tensor  # noqa: F401
+except ImportError:
+    import torchvision.transforms.functional as _tvtf
+    sys.modules["torchvision.transforms.functional_tensor"] = _tvtf  # type: ignore[assignment]
+
 from PIL import Image
 
 
