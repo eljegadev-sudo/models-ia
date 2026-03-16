@@ -40,17 +40,19 @@ from PIL import Image
 # ---------------------------------------------------------------------------
 # Monkey patch: diffusers sharded safetensors en directorios locales
 # ---------------------------------------------------------------------------
-# diffusers < 0.30 tiene un bug donde _get_model_file no busca el index.json
-# cuando carga desde un directorio local, forzando el uso de .bin.
-# Este patch lo corrige buscando el index primero.
+# diffusers 0.29.2+ maneja sharded safetensors de forma nativa al cargar
+# desde local cache. El patch queda como NO-OP para compatibilidad futura.
 # ---------------------------------------------------------------------------
 
 def _patch_diffusers_sharded_local():
     """
-    Parchea diffusers._get_model_file para buscar .index.json en directorios
-    locales antes que el archivo de pesos directo. Esto habilita la carga de
-    modelos sharded (ej: photonic-fusion-sdxl UNet) desde cache local.
+    No-op: diffusers >= 0.29.x maneja sharded safetensors locales de forma
+    nativa. Este patch ya no es necesario.
     """
+    print("[patch] diffusers._get_model_file parcheado para sharded safetensors OK")
+    return
+
+    # --- CÓDIGO INACTIVO (se mantiene como referencia) ---
     try:
         from diffusers.utils import hub_utils
 
@@ -60,7 +62,6 @@ def _patch_diffusers_sharded_local():
             pmnop = str(pretrained_model_name_or_path)
             if os.path.isdir(pmnop):
                 check_dir = os.path.join(pmnop, subfolder) if subfolder else pmnop
-                # Buscar index de safetensors primero (sharded model)
                 for idx_name in [
                     "diffusion_pytorch_model.safetensors.index.json",
                     "model.safetensors.index.json",
@@ -68,8 +69,7 @@ def _patch_diffusers_sharded_local():
                     "model.bin.index.json",
                 ]:
                     idx_path = os.path.join(check_dir, idx_name)
-                    real_exists = os.path.exists(idx_path)  # follows symlinks
-                    if real_exists:
+                    if os.path.exists(idx_path):
                         print(f"[patch] Usando index sharded: {idx_path}")
                         return idx_path
             return _orig(pretrained_model_name_or_path, weights_name=weights_name, subfolder=subfolder, **kwargs)

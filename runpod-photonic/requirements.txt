@@ -18,9 +18,11 @@ tqdm>=4.66.0
 requests>=2.31.0
 
 # ---- HuggingFace — pinned to versions compatible with PyTorch 2.2.1 ----
+# diffusers 0.29.2: natively handles sharded safetensors from local cache
+# transformers 4.38.2: no torch.distributed.device_mesh requirement
 huggingface-hub>=0.21.0
 transformers==4.38.2
-diffusers==0.27.2
+diffusers==0.29.2
 accelerate==0.29.3
 
 # ---- Vision / Face ----
