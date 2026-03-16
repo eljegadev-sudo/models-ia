@@ -73,6 +73,72 @@ sys.path.insert(0, "/app")
 import generate_photonic as gp
 
 # ---------------------------------------------------------------------------
+# Global model cache — loaded once per worker, reused across all requests.
+# This avoids re-downloading and re-loading ~20 GB on every job.
+# ---------------------------------------------------------------------------
+
+_CACHE: dict = {
+    "pipeline": None,       # StableDiffusionXLPipeline
+    "vae": None,            # AutoencoderKL
+    "ip_ckpt_plus": None,   # FaceID Plus v2 SDXL checkpoint path
+    "ip_ckpt_basic": None,  # FaceID basic SDXL checkpoint path
+}
+
+
+def _ensure_pipeline():
+    """Load SDXL pipeline + VAE into GPU once and cache globally."""
+    if _CACHE["pipeline"] is not None:
+        return _CACHE["pipeline"]
+
+    from diffusers import StableDiffusionXLPipeline
+    import torch
+
+    print("[cache] Cargando pipeline SDXL (primera vez)...")
+    vae = gp._load_vae()
+    _CACHE["vae"] = vae
+
+    snap = gp._get_local_snapshot_path(gp.MODEL_ID)
+    if snap:
+        print(f"[cache] Cargando desde snapshot local: {snap}")
+        try:
+            pipe = StableDiffusionXLPipeline.from_pretrained(
+                snap, vae=vae, torch_dtype=torch.float16, use_safetensors=True
+            )
+        except Exception as e:
+            print(f"[cache] Snapshot local falló ({e}), intentando repo ID...")
+            pipe = StableDiffusionXLPipeline.from_pretrained(
+                gp.MODEL_ID, vae=vae, torch_dtype=torch.float16, use_safetensors=True
+            )
+    else:
+        print(f"[cache] Descargando desde repo: {gp.MODEL_ID}")
+        pipe = StableDiffusionXLPipeline.from_pretrained(
+            gp.MODEL_ID, vae=vae, torch_dtype=torch.float16, use_safetensors=True
+        )
+
+    gp._apply_scheduler(pipe)
+    pipe.enable_model_cpu_offload()
+    pipe.enable_vae_tiling()
+    gp._try_xformers(pipe)
+
+    _CACHE["pipeline"] = pipe
+    print("[cache] Pipeline SDXL cargado y cacheado OK")
+    return pipe
+
+
+def _ensure_ip_ckpts():
+    """Download FaceID checkpoints once and cache paths."""
+    from huggingface_hub import hf_hub_download
+    if _CACHE["ip_ckpt_plus"] is None:
+        print("[cache] Descargando FaceID Plus checkpoint...")
+        _CACHE["ip_ckpt_plus"] = hf_hub_download(repo_id=gp.FACEID_REPO, filename=gp.FACEID_BIN)
+        print(f"[cache] ip_ckpt_plus: {_CACHE['ip_ckpt_plus']}")
+    if _CACHE["ip_ckpt_basic"] is None:
+        print("[cache] Descargando FaceID basic checkpoint...")
+        _CACHE["ip_ckpt_basic"] = hf_hub_download(repo_id=gp.FACEID_REPO, filename="ip-adapter-faceid_sdxl.bin")
+        print(f"[cache] ip_ckpt_basic: {_CACHE['ip_ckpt_basic']}")
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
@@ -102,12 +168,11 @@ class _Args:
 
 
 def _run_txt2img(args: _Args, t0: float) -> dict:
-    from diffusers import StableDiffusionXLPipeline
     import torch
 
     width, height, steps, guidance, negative = gp.resolve(args)
     prompt = f"{args.prompt}, {gp.SKIN_TAGS}"
-    pipe = gp.load_pipeline(StableDiffusionXLPipeline)
+    pipe = _ensure_pipeline()
 
     result = pipe(
         prompt=prompt,
@@ -119,8 +184,6 @@ def _run_txt2img(args: _Args, t0: float) -> dict:
         generator=gp.make_generator(args.seed),
     )
     img = result.images[0]
-
-    del pipe
     torch.cuda.empty_cache()
 
     return {
@@ -130,7 +193,6 @@ def _run_txt2img(args: _Args, t0: float) -> dict:
 
 
 def _run_img2img(args: _Args, req: dict, t0: float) -> dict:
-    from diffusers import StableDiffusionXLImg2ImgPipeline
     from PIL import Image
     import torch
 
@@ -140,7 +202,7 @@ def _run_img2img(args: _Args, req: dict, t0: float) -> dict:
     ref_path = _decode_image_to_tempfile(req["ref_image"])
     init_image = Image.open(ref_path).convert("RGB").resize((width, height), Image.LANCZOS)
 
-    pipe = gp.load_pipeline(StableDiffusionXLImg2ImgPipeline)
+    pipe = _ensure_pipeline()
 
     result = pipe(
         prompt=prompt,
@@ -153,7 +215,6 @@ def _run_img2img(args: _Args, req: dict, t0: float) -> dict:
     )
     img = result.images[0]
 
-    del pipe
     torch.cuda.empty_cache()
     Path(ref_path).unlink(missing_ok=True)
 
@@ -164,8 +225,6 @@ def _run_img2img(args: _Args, req: dict, t0: float) -> dict:
 
 
 def _run_faceid(args: _Args, req: dict, t0: float) -> dict:
-    from diffusers import StableDiffusionXLPipeline
-    from huggingface_hub import hf_hub_download
     from ip_adapter.ip_adapter_faceid import IPAdapterFaceIDPlusXL
     import torch
 
@@ -182,58 +241,10 @@ def _run_faceid(args: _Args, req: dict, t0: float) -> dict:
     ref_path = _decode_image_to_tempfile(req["ref_image"])
     faceid_embeds, face_crop = gp.extract_face_embedding(ref_path)
 
-    ip_ckpt = hf_hub_download(repo_id=gp.FACEID_REPO, filename=gp.FACEID_BIN)
-
-    gp._verify_and_clean_model_cache(gp.MODEL_ID)
-    snap_path = gp._get_local_snapshot_path(gp.MODEL_ID)
-    if snap_path:
-        gp._maybe_merge_unet_shards(snap_path)
-    vae = gp._load_vae()
-
-    def _load_faceid_pipe(_vae):
-        _errors = []
-        # Probar primero desde ruta local (evita bug sharded safetensors en diffusers)
-        _local = gp._get_local_snapshot_path(gp.MODEL_ID)
-        _sources = [_local] if _local else []
-        _sources.append(gp.MODEL_ID)
-        for _src in _sources:
-            for _kwargs in [{"use_safetensors": True}, {}]:
-                try:
-                    p = StableDiffusionXLPipeline.from_pretrained(
-                        _src, vae=_vae, torch_dtype=torch.float16, **_kwargs,
-                    )
-                    print(f"  [faceid pipe] OK: src={_src}, kwargs={_kwargs}")
-                    return p
-                except Exception as _e:
-                    _errors.append(f"src={_src},kwargs={_kwargs}: {_e}")
-        raise RuntimeError("\n".join(_errors))
-
-    try:
-        pipe = _load_faceid_pipe(vae)
-    except RuntimeError as _fe:
-        import traceback as _tb
-        print(f"[faceid] Primer intento fallido:\n{_fe}")
-        print("[faceid] Nuclear clean + snapshot_download + merge + reintento...")
-        gp._nuclear_clean_model_cache(gp.MODEL_ID)
-        try:
-            from huggingface_hub import snapshot_download
-            snap_dl = snapshot_download(
-                gp.MODEL_ID,
-                local_dir=None,
-                ignore_patterns=["*.msgpack", "*.ckpt", "flax_model*"],
-            )
-            print(f"[faceid] snapshot_download OK: {snap_dl}")
-        except Exception as _dl_e:
-            print(f"[faceid] snapshot_download fallido: {_dl_e}")
-            _tb.print_exc()
-        snap_retry = gp._get_local_snapshot_path(gp.MODEL_ID)
-        if snap_retry:
-            gp._maybe_merge_unet_shards(snap_retry)
-        vae = gp._load_vae()
-        pipe = _load_faceid_pipe(vae)
-    gp._apply_scheduler(pipe)
-    pipe.enable_vae_tiling()
-    gp._try_xformers(pipe)
+    # Usar pipeline cacheado (evita recargar ~15 GB en cada request)
+    _ensure_ip_ckpts()
+    ip_ckpt = _CACHE["ip_ckpt_plus"]
+    pipe = _ensure_pipeline()
 
     # Intentar FaceID Plus (con CLIP image encoder para mayor fidelidad facial)
     # Si el CLIP encoder falla, caer a FaceID no-plus (solo embedding facial)
@@ -245,8 +256,7 @@ def _run_faceid(args: _Args, req: dict, t0: float) -> dict:
     except Exception as _clip_err:
         print(f"[faceid] CLIP encoder falló ({_clip_err}), usando FaceID no-plus")
         from ip_adapter.ip_adapter_faceid import IPAdapterFaceIDXL
-        _ip_ckpt_basic = hf_hub_download(repo_id=gp.FACEID_REPO, filename="ip-adapter-faceid_sdxl.bin")
-        ip_model = IPAdapterFaceIDXL(pipe, _ip_ckpt_basic, "cuda")
+        ip_model = IPAdapterFaceIDXL(pipe, _CACHE["ip_ckpt_basic"], "cuda")
         _use_plus = False
 
     ip_model.set_scale(req.get("face_strength", 0.4))

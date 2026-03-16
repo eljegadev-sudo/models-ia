@@ -77,8 +77,8 @@ async function callRunPod(
 
   console.log(`[photonic] RunPod job enviado: ${jobId}`);
 
-  // Polling hasta que el job termine (max 25 minutos, cubre primer cold start + descarga modelos)
-  const maxWaitMs = 25 * 60 * 1000;
+  // Polling hasta que el job termine (max 35 minutos, cubre cold start + descarga ~20 GB de modelos)
+  const maxWaitMs = 35 * 60 * 1000;
   const startTime = Date.now();
   let pollInterval = 5000;
 
@@ -112,7 +112,7 @@ async function callRunPod(
     }
   }
 
-  throw new Error("RunPod job timeout (>10 min)");
+  throw new Error("RunPod job timeout (>35 min)");
 }
 
 /**

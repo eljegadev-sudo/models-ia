@@ -28,7 +28,7 @@ accelerate==0.29.3
 # ---- Vision / Face ----
 opencv-python-headless>=4.9.0.80
 insightface==0.7.3
-onnxruntime-gpu==1.17.1
+onnxruntime-gpu==1.18.1
 
 # ---- GFPGAN + deps (use git for cached_download compat) ----
 basicsr>=1.4.2
