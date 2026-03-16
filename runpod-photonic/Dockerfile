@@ -19,13 +19,16 @@ RUN apt-get update -qq && \
         wget \
     && rm -rf /var/lib/apt/lists/*
 
-# Remove pre-installed xformers from base image (incompatible version with our deps)
+# Remove xformers bundled with base image — it was compiled for an older
+# PyTorch and its torch.library.infer_schema calls break diffusers>=0.30
+# imports on PyTorch 2.4. Our code enables it optionally via _try_xformers().
 RUN pip uninstall -y xformers || true
 
 # Install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt && \
-    pip install --force-reinstall --no-cache-dir "numpy==1.26.4"
+    pip install --force-reinstall --no-cache-dir "numpy==1.26.4" && \
+    pip install --no-cache-dir "xformers>=0.0.28" || echo "xformers optional install skipped"
 
 # Patch huggingface_hub.cached_download via sitecustomize.py so it runs at
 # Python startup (before any import), fixing gfpgan compatibility with
